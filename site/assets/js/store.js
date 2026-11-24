@@ -36,12 +36,6 @@
     try { window[area].removeItem(key); } catch (e) { /* ignore */ }
   }
 
-  function sampleResults() {
-    const out = {};
-    D.standards.forEach((s) => s.issues.forEach((i) => i.indicators.forEach((ind, idx) => { out[`${i.code}#${idx}`] = ind.sample; })));
-    return out;
-  }
-
   // =====================================================================
   // LOCAL
   // =====================================================================
@@ -67,7 +61,7 @@
       async load() {
         return {
           evidence: L(K.evidence, []),
-          results: L(K.results, null) || sampleResults(),
+          results: L(K.results, {}),
           verdicts: L(K.verdicts, {}),
           notes: L(K.notes, {}),
         };
@@ -89,7 +83,7 @@
         return { added: added.length, skipped: items.length - added.length };
       },
       async setResult(key, value) {
-        const r = L(K.results, null) || sampleResults();
+        const r = L(K.results, {});
         r[key] = value;
         W(K.results, r);
       },
@@ -106,12 +100,6 @@
         W(K.notes, n);
       },
       async clearResults() {
-        const empty = {};
-        Object.keys(sampleResults()).forEach((k) => { empty[k] = ""; });
-        W(K.results, empty);
-        del("localStorage", K.verdicts);
-      },
-      async resetSample() {
         del("localStorage", K.results);
         del("localStorage", K.verdicts);
       },
@@ -240,7 +228,6 @@
       setResult: (key, value) => api("setResult", { key, value }),
       setAssessment: (issue, patch) => api("setAssessment", { issue, ...patch }),
       clearResults: () => api("clearResults"),
-      resetSample: async () => { throw new Error("ใช้ได้เฉพาะโหมดทดลอง"); },
       can(perm) { return Boolean(store.user && store.user.perms && store.user.perms.includes(perm)); },
     };
     return store;

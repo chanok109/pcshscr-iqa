@@ -57,6 +57,8 @@
       </section>
       <p class="notice" id="home-locked" hidden>เข้าสู่ระบบด้วยบัญชี @<span class="domain"></span> เพื่อดูข้อมูลหลักฐานและผลการประเมิน</p>
 
+      <section class="identity-wrap" id="home-identity" aria-label="วิสัยทัศน์และอัตลักษณ์"></section>
+
       <h2 class="section-title">ขั้นตอนประกันคุณภาพภายใน</h2>
       <ol class="sequence" id="home-steps"></ol>
     </section>
@@ -95,7 +97,7 @@
     <!-- มาตรฐาน -->
     <section id="page-standards" class="page" hidden>
       <h1>มาตรฐานการศึกษาของสถานศึกษา</h1>
-      <p class="lead">อ้างอิงประกาศกระทรวงศึกษาธิการ เรื่อง มาตรฐานการศึกษาระดับการศึกษาขั้นพื้นฐาน พ.ศ. 2561 และเพิ่มมาตรฐานอัตลักษณ์ของโรงเรียน (ร่าง)</p>
+      <p class="lead">มาตรฐานการศึกษาของสถานศึกษา 4 มาตรฐาน ตามประกาศกระทรวงศึกษาธิการ พ.ศ. 2561 และมาตรฐานความเป็นเลิศทางวิชาการของโรงเรียนวิทยาศาสตร์ พร้อมค่าเป้าหมายและผลการประเมินปีการศึกษา <span class="py"></span> จากรายงาน SAR</p>
       <div id="standards-list"></div>
       <h2>เกณฑ์ระดับคุณภาพ</h2>
       <div class="levels" id="levels-legend"></div>
@@ -166,11 +168,9 @@
     <section id="page-assessment" class="page" hidden>
       <h1>ผลการประเมินคุณภาพภายใน</h1>
       <p class="lead">กรอกผลการดำเนินงาน ระบบเสนอระดับคุณภาพเบื้องต้นจากค่าเป้าหมาย แล้วให้คณะกรรมการตัดสินระดับสุดท้าย (ระดับ 5 ยอดเยี่ยม ต้องตัดสินโดยคณะกรรมการ)</p>
-      <div class="notice warn local-only">โหมดทดลอง: ค่าเป้าหมายและผลการดำเนินงานที่แสดงเป็น <strong>ข้อมูลตัวอย่าง</strong></div>
-      <div class="notice warn remote-only" hidden>ค่าเป้าหมายใน <code>assets/js/data.js</code> ยังเป็นข้อมูลตัวอย่าง — ปรับให้เป็นค่าที่โรงเรียนประกาศ</div>
+      <div class="notice warn">ค่าเป้าหมายปีการศึกษา <span class="ay"></span> ตั้งต้นจากค่าเป้าหมายใน SAR ปีการศึกษา <span class="py"></span> ปรับให้ตรงกับประกาศค่าเป้าหมายของปีนี้ได้ที่ <code>assets/js/data.js</code></div>
       <div class="notice" id="as-readonly" hidden>บทบาทของคุณดูผลได้อย่างเดียว — การบันทึกผลและตัดสินระดับทำได้เฉพาะกรรมการประเมินและผู้ดูแลระบบ</div>
       <div class="toolbar">
-        <button class="btn" id="as-reset" type="button">คืนค่าข้อมูลตัวอย่าง</button>
         <button class="btn" id="as-clear" type="button">ล้างผลการดำเนินงานทั้งหมด</button>
       </div>
       <div id="assessment-list"></div>

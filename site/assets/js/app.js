@@ -58,15 +58,26 @@
   }
 
   // ---------- ระดับคุณภาพ ----------
-  function suggestLevel(result, target) {
+  function suggestLevel(result, target, kind) {
     if (result === "" || result == null || isNaN(result) || !target) return null;
+    if (kind === "level") return Math.min(5, Math.max(1, Math.round(Number(result))));
     const ratio = Number(result) / Number(target);
     const hit = D.levels.filter((l) => l.minRatio != null).sort((a, b) => b.minRatio - a.minRatio).find((l) => ratio >= l.minRatio);
     return hit ? hit.level : 1;
   }
-  function issueSuggested(issue) {
-    const lv = issue.indicators.map((ind, idx) => suggestLevel(S.results[indKey(issue, idx)], ind.target)).filter((x) => x != null);
-    return lv.length ? Math.round(lv.reduce((a, b) => a + b, 0) / lv.length) : null;
+  // ตามวิธีใน SAR: เทียบค่าเฉลี่ยผลของตัวชี้วัดย่อยกับค่าเฉลี่ยค่าเป้าหมาย (ตัวชี้วัดแบบร้อยละ)
+  // ตัวชี้วัดแบบระดับคุณภาพ ใช้ค่าเฉลี่ยของระดับ
+  function issueSuggested(issue, results = S.results) {
+    const rows = issue.indicators.map((ind, idx) => ({ ind, v: results[indKey(issue, idx)] }))
+      .filter(({ v }) => v !== "" && v != null && !isNaN(v));
+    if (!rows.length) return null;
+    if (rows.every(({ ind }) => ind.kind === "level")) {
+      return Math.round(rows.reduce((a, { v }) => a + Number(v), 0) / rows.length);
+    }
+    const pct = rows.filter(({ ind }) => ind.kind !== "level");
+    const meanR = pct.reduce((a, { v }) => a + Number(v), 0) / pct.length;
+    const meanT = pct.reduce((a, { ind }) => a + ind.target, 0) / pct.length;
+    return suggestLevel(meanR, meanT, "percent");
   }
   function issueLevel(issue) {
     const v = S.verdicts[issue.code];
@@ -76,6 +87,10 @@
     const lv = std.issues.map(issueLevel).filter((x) => x != null);
     return lv.length ? Math.round(lv.reduce((a, b) => a + b, 0) / lv.length) : null;
   }
+  const fmt = (v) => (v === "" || v == null ? "—" : Number(v).toLocaleString("th-TH", { maximumFractionDigits: 2 }));
+  const fmtInd = (ind, v) => (ind.kind === "level" ? (v ? levelInfo(Number(v)).name : "—") : fmt(v));
+  const PY = D.school.previousYear;
+
   function levelBadge(n) {
     if (!n) return `<span class="badge lv0">ยังไม่ประเมิน</span>`;
     return `<span class="badge lv${n}"><b>${n}</b>${esc(levelInfo(n).name)}</span>`;
@@ -114,7 +129,6 @@
   function applyPermissions() {
     $("#evidence-form").hidden = !can("evidence:add");
     $("#ev-import-label").hidden = !(store.mode === "local" || can("admin"));
-    $("#as-reset").hidden = store.mode !== "local";
     $("#as-clear").hidden = !can("admin");
     $$(".local-only").forEach((el) => { el.hidden = store.mode !== "local"; });
     $$(".remote-only").forEach((el) => { el.hidden = store.mode !== "remote"; });
@@ -185,8 +199,19 @@
         <span class="std-name">${esc(s.name)}</span>
         <span class="meter" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<i class="${lv && n <= lv ? "lv" + lv : ""}"></i>`).join("")}</span>
         ${levelBadge(lv)}
+        <span class="std-prev">ปี ${PY}: ${s.prev ? esc(levelInfo(s.prev.level).name) : "—"}</span>
       </a>`;
     }).join("");
+
+    const sc = D.school;
+    $("#home-identity").innerHTML = `
+      <blockquote class="vision"><p>${esc(sc.vision)}</p><cite>วิสัยทัศน์</cite></blockquote>
+      <dl class="identity">
+        <div><dt>เอกลักษณ์ของโรงเรียน</dt><dd>${esc(sc.schoolIdentity)}</dd></div>
+        <div><dt>อัตลักษณ์ของนักเรียน</dt><dd>${esc(sc.studentIdentity)}</dd></div>
+        <div><dt>คำขวัญ</dt><dd>${esc(sc.motto)}</dd></div>
+        <div><dt>ปรัชญา</dt><dd>${esc(sc.philosophy)}</dd></div>
+      </dl>`;
 
     $("#home-stats").innerHTML = [
       [locked ? "—" : ev.length, "หลักฐานในคลัง"],
@@ -209,16 +234,27 @@
 
   // ---------- มาตรฐาน ----------
   function renderStandards() {
+    const list = (title, items) => items && items.length
+      ? `<div><h4>${title}</h4><ol>${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div>` : "";
     $("#standards-list").innerHTML = D.standards.map((s) => `
       <details class="panel std" ${s.code === "1" ? "open" : ""}>
-        <summary><span class="std-no">มาตรฐานที่ ${s.code}</span> ${esc(s.name)} <small>(${s.issues.length} ประเด็น)</small></summary>
+        <summary><span class="std-no">มาตรฐานที่ ${s.code}</span> ${esc(s.name)} <small>${s.issues.length} ประเด็น</small></summary>
+        <div class="std-meta">
+          <div><span class="meta-k">นวัตกรรม/วิธีปฏิบัติที่เป็นเลิศ</span><strong>${esc(s.model || "—")}</strong></div>
+          <div><span class="meta-k">จุดเน้น</span><span>${esc(s.focus || "—")}</span></div>
+          <div><span class="meta-k">ผลปี ${PY}</span>${s.prev ? levelBadge(s.prev.level) : "—"}</div>
+        </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>ประเด็น</th><th>ประเด็นพิจารณา</th><th>ตัวชี้วัด</th><th class="num">ค่าเป้าหมาย*</th></tr></thead>
-          <tbody>${s.issues.map((i) => i.indicators.map((ind, idx) => `
-            <tr>${idx === 0 ? `<td rowspan="${i.indicators.length}" class="code">${i.code}</td><td rowspan="${i.indicators.length}">${esc(i.name)}</td>` : ""}
-            <td>${esc(ind.name)}</td><td class="num">${ind.target}</td></tr>`).join("")).join("")}
+          <thead><tr><th>ประเด็น</th><th>ตัวชี้วัด</th><th class="num">ค่าเป้าหมาย</th><th class="num">ผลปี ${PY}</th></tr></thead>
+          <tbody>${s.issues.map((i) => i.indicators.map((ind, idx) => {
+            const below = ind.kind !== "level" && ind.prev < ind.target;
+            return `<tr>${idx === 0 ? `<td rowspan="${i.indicators.length}" class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>` : ""}
+            <td>${esc(ind.name)}</td><td class="num">${fmtInd(ind, ind.target)}</td>
+            <td class="num ${below ? "below" : ""}">${fmtInd(ind, ind.prev)}</td></tr>`;
+          }).join("")).join("")}
           </tbody></table></div>
-        <p class="hint">* ค่าเป้าหมายเป็นข้อมูลตัวอย่าง แก้ไขได้ที่ <code>assets/js/data.js</code></p>
+        ${s.review ? `<div class="review"><p class="review-title">สรุปจาก SAR ปีการศึกษา ${PY}</p>
+          <div class="review-grid">${list("จุดเด่น", s.review.strengths)}${list("จุดที่ควรพัฒนา", s.review.improve)}${list("ข้อเสนอแนะ", s.review.suggest)}</div></div>` : ""}
       </details>`).join("");
 
     $("#levels-legend").innerHTML = D.levels.map((l) =>
@@ -367,12 +403,15 @@
             ${i.indicators.map((ind, idx) => {
               const k = indKey(i, idx);
               const v = S.results[k] ?? "";
-              const lv = suggestLevel(v, ind.target);
+              const lv = suggestLevel(v, ind.target, ind.kind);
               const pct = v === "" ? 0 : Math.min(120, (Number(v) / ind.target) * 100);
+              const input = ind.kind === "level"
+                ? `<select data-result="${k}" ${dis}><option value="">—</option>${D.levels.map((l) => `<option value="${l.level}" ${String(v) === String(l.level) ? "selected" : ""}>${l.level} ${esc(l.name)}</option>`).join("")}</select>`
+                : `<input type="number" step="any" min="0" data-result="${k}" value="${esc(v)}" ${dis}>`;
               return `<div class="as-ind">
                 <span class="as-ind-name">${esc(ind.name)}</span>
-                <span class="as-ind-target">เป้าหมาย <b>${ind.target}</b></span>
-                <label class="as-ind-input">ผล <input type="number" step="any" min="0" data-result="${k}" value="${esc(v)}" ${dis}></label>
+                <span class="as-ind-target">เป้าหมาย <b>${fmtInd(ind, ind.target)}</b><small>ปี ${PY}: ${fmtInd(ind, ind.prev)}</small></span>
+                <label class="as-ind-input">ผล ${input}</label>
                 <span class="bar" aria-hidden="true"><i class="lv${lv || 0}" style="width:${pct / 1.2}%"></i><em></em></span>
                 <span>${levelBadge(lv)}</span>
               </div>`;
@@ -426,12 +465,6 @@
       }, 1000);
     });
 
-    $("#as-reset").addEventListener("click", async () => {
-      if (!confirm("คืนค่าผลการดำเนินงานเป็นข้อมูลตัวอย่าง และล้างระดับที่คณะกรรมการตัดสิน?")) return;
-      await run(() => store.resetSample()).catch(() => {});
-      await reload();
-      renderAssessment();
-    });
     $("#as-clear").addEventListener("click", async () => {
       if (!confirm("ล้างผลการดำเนินงานและระดับที่ตัดสินทั้งหมด?")) return;
       await run(() => store.clearResults(), "ล้างข้อมูลแล้ว").catch(() => {});
@@ -461,7 +494,7 @@
               <h4>${i.code} ${esc(i.name)} ${levelBadge(issueLevel(i))}</h4>
               <ul>${i.indicators.map((ind, idx) => {
                 const v = S.results[indKey(i, idx)];
-                return `<li>${esc(ind.name)}: ผล ${v === "" || v == null ? "—" : esc(v)} / เป้าหมาย ${ind.target}</li>`;
+                return `<li>${esc(ind.name)}: ผล ${fmtInd(ind, v)} / เป้าหมาย ${fmtInd(ind, ind.target)} <span class="hint">(ปี ${PY}: ${fmtInd(ind, ind.prev)})</span></li>`;
               }).join("")}</ul>
               ${n.strengths ? `<p><b>จุดเด่น:</b> ${esc(n.strengths)}</p>` : ""}
               ${n.improve ? `<p><b>จุดที่ควรพัฒนา:</b> ${esc(n.improve)}</p>` : ""}
@@ -498,6 +531,7 @@
     $("#school-name").textContent = D.school.name;
     $$(".school-name").forEach((el) => { el.textContent = D.school.name; });
     $$(".ay").forEach((el) => { el.textContent = AY; });
+    $$(".py").forEach((el) => { el.textContent = PY; });
     $$(".domain").forEach((el) => { el.textContent = (window.IQA_CONFIG || {}).allowedDomain || ""; });
     $(".nav-toggle").addEventListener("click", (e) => {
       const open = $("#nav").classList.toggle("open");
