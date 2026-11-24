@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบประกันคุณภาพภายใน | PCSHS เชียงราย</title>
+  <meta name="description" content="ระบบประกันคุณภาพภายในสถานศึกษา โรงเรียนวิทยาศาสตร์จุฬาภรณราชวิทยาลัย เชียงราย">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#home">
+        <span class="brand-mark" aria-hidden="true">IQA</span>
+        <span class="brand-text">
+          <strong>ระบบประกันคุณภาพภายใน</strong>
+          <small id="school-name"></small>
+        </span>
+      </a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav">เมนู</button>
+      <nav id="nav" class="nav">
+        <a href="#home">หน้าแรก</a>
+        <a href="#structure">โครงสร้าง</a>
+        <a href="#standards">มาตรฐาน</a>
+        <a href="#process">กระบวนการ</a>
+        <a href="#evidence">คลังหลักฐาน</a>
+        <a href="#assessment">ผลการประเมิน</a>
+        <a href="#reports">รายงาน</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap" id="main">
+
+    <!-- หน้าแรก -->
+    <section id="page-home" class="page">
+      <div class="hero">
+        <p class="eyebrow">ปีการศึกษา <span class="ay"></span></p>
+        <h1>ระบบประกันคุณภาพภายในสถานศึกษา</h1>
+        <p class="lead">จัดการมาตรฐาน ค่าเป้าหมาย หลักฐานเชิงประจักษ์ และผลการประเมินคุณภาพ ตามกฎกระทรวงการประกันคุณภาพการศึกษา พ.ศ. 2561 ด้วยวงจร PDCA</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#evidence">บันทึกหลักฐาน</a>
+          <a class="btn" href="#assessment">ดูผลการประเมิน</a>
+        </div>
+      </div>
+      <div class="stats" id="home-stats"></div>
+      <h2>ภาพรวมรายมาตรฐาน</h2>
+      <div class="cards" id="home-standards"></div>
+      <h2>ขั้นตอนประกันคุณภาพภายใน</h2>
+      <ol class="steps-mini" id="home-steps"></ol>
+    </section>
+
+    <!-- โครงสร้าง -->
+    <section id="page-structure" class="page" hidden>
+      <h1>โครงสร้างองค์กรประกันคุณภาพ</h1>
+      <p class="lead">คณะกรรมการประเมินคุณภาพภายในขึ้นตรงต่อผู้อำนวยการ และแยกจากคณะทำงานที่ลงมือปฏิบัติ เพื่อให้การประเมินเป็นอิสระ</p>
+      <div class="org">
+        <div class="org-node top">คณะกรรมการสถานศึกษาขั้นพื้นฐาน</div>
+        <div class="org-line"></div>
+        <div class="org-node lead-node">ผู้อำนวยการโรงเรียน</div>
+        <div class="org-split">
+          <div class="org-col">
+            <div class="org-line"></div>
+            <div class="org-node">คณะกรรมการอำนวยการประกันคุณภาพ<small>ผอ. + รองผู้อำนวยการทุกกลุ่มบริหาร</small></div>
+            <div class="org-line"></div>
+            <div class="org-node accent">งานประกันคุณภาพการศึกษา<small>หัวหน้างาน + เลขานุการ</small></div>
+            <div class="org-line"></div>
+            <div class="org-row" id="org-standards"></div>
+            <div class="org-line"></div>
+            <div class="org-node muted">กลุ่มสาระฯ 8 กลุ่ม · งานวิจัย/โครงงาน · งานหอพัก · กิจการนักเรียน · แนะแนว · บุคคล · งบประมาณ · ทั่วไป</div>
+          </div>
+          <div class="org-col side">
+            <div class="org-line"></div>
+            <div class="org-node eval">คณะกรรมการประเมินคุณภาพภายใน<small>ครู + ผู้ทรงคุณวุฒิภายนอก</small></div>
+            <div class="org-line"></div>
+            <div class="org-node">คณะทำงานสารสนเทศและระบบดิจิทัล</div>
+          </div>
+        </div>
+      </div>
+      <h2>บทบาทหน้าที่</h2>
+      <div class="table-wrap"><table id="roles-table"><thead><tr><th>หน่วย</th><th>หน้าที่หลัก</th><th>ผลผลิต</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- มาตรฐาน -->
+    <section id="page-standards" class="page" hidden>
+      <h1>มาตรฐานการศึกษาของสถานศึกษา</h1>
+      <p class="lead">อ้างอิงประกาศกระทรวงศึกษาธิการ เรื่อง มาตรฐานการศึกษาระดับการศึกษาขั้นพื้นฐาน พ.ศ. 2561 และเพิ่มมาตรฐานอัตลักษณ์ของโรงเรียน (ร่าง)</p>
+      <div id="standards-list"></div>
+      <h2>เกณฑ์ระดับคุณภาพ</h2>
+      <div class="levels" id="levels-legend"></div>
+    </section>
+
+    <!-- กระบวนการ -->
+    <section id="page-process" class="page" hidden>
+      <h1>กระบวนการประกันคุณภาพภายใน</h1>
+      <p class="lead">6 ขั้นตอนตามกฎกระทรวงการประกันคุณภาพการศึกษา พ.ศ. 2561 จับคู่กับวงจร PDCA</p>
+      <div class="process" id="process-list"></div>
+      <h2>ปฏิทินการดำเนินงานรายปี</h2>
+      <div class="timeline" id="calendar-list"></div>
+    </section>
+
+    <!-- คลังหลักฐาน -->
+    <section id="page-evidence" class="page" hidden>
+      <h1>คลังหลักฐานเชิงประจักษ์</h1>
+      <p class="lead">บันทึกหลักฐานตามประเด็นพิจารณาและขั้น PDCA ระบบสร้างรหัสหลักฐานให้อัตโนมัติ</p>
+      <div class="notice">ข้อมูลถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น — ใช้ปุ่ม "ส่งออก" เพื่อสำรองหรือส่งต่อ</div>
+      <form id="evidence-form" class="panel form-grid">
+        <label class="span-2">ชื่อหลักฐาน
+          <input name="title" required placeholder="เช่น รายงานผลโครงการค่ายวิทยาศาสตร์ ม.4">
+        </label>
+        <label>ประเด็นพิจารณา
+          <select name="issue" required></select>
+        </label>
+        <label>ขั้น PDCA
+          <select name="phase" required>
+            <option value="P">P — วางแผน</option>
+            <option value="D">D — ดำเนินการ</option>
+            <option value="C">C — ประเมิน</option>
+            <option value="A">A — ปรับปรุง</option>
+          </select>
+        </label>
+        <label>ผู้รับผิดชอบ / หน่วยงาน
+          <input name="owner" placeholder="เช่น กลุ่มสาระวิทยาศาสตร์">
+        </label>
+        <label>ลิงก์ไฟล์ (Google Drive / OneDrive)
+          <input name="url" type="url" placeholder="https://">
+        </label>
+        <div class="span-2 form-actions">
+          <button class="btn primary" type="submit">บันทึกหลักฐาน</button>
+        </div>
+      </form>
+
+      <div class="toolbar">
+        <input id="ev-search" type="search" placeholder="ค้นหาชื่อ / รหัส / ผู้รับผิดชอบ">
+        <select id="ev-filter-std"><option value="">ทุกมาตรฐาน</option></select>
+        <select id="ev-filter-phase">
+          <option value="">ทุกขั้น</option><option>P</option><option>D</option><option>C</option><option>A</option>
+        </select>
+        <button class="btn" id="ev-export-csv" type="button">ส่งออก CSV</button>
+        <button class="btn" id="ev-export-json" type="button">ส่งออก JSON</button>
+        <label class="btn file-btn">นำเข้า JSON<input id="ev-import" type="file" accept="application/json" hidden></label>
+      </div>
+      <div class="table-wrap">
+        <table id="evidence-table">
+          <thead><tr><th>รหัส</th><th>ชื่อหลักฐาน</th><th>ประเด็น</th><th>PDCA</th><th>ผู้รับผิดชอบ</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2>ความครบถ้วนของหลักฐานรายประเด็น</h2>
+      <div class="coverage" id="coverage"></div>
+    </section>
+
+    <!-- ผลการประเมิน -->
+    <section id="page-assessment" class="page" hidden>
+      <h1>ผลการประเมินคุณภาพภายใน</h1>
+      <p class="lead">กรอกผลการดำเนินงาน ระบบเสนอระดับคุณภาพเบื้องต้นจากค่าเป้าหมาย แล้วให้คณะกรรมการตัดสินระดับสุดท้าย (ระดับ 5 ยอดเยี่ยม ต้องตัดสินโดยคณะกรรมการ)</p>
+      <div class="notice warn">ค่าเป้าหมายและผลการดำเนินงานที่แสดงเป็น <strong>ข้อมูลตัวอย่าง</strong> — แก้ไขให้เป็นค่าจริงของโรงเรียน</div>
+      <div class="toolbar">
+        <button class="btn" id="as-reset" type="button">คืนค่าข้อมูลตัวอย่าง</button>
+        <button class="btn" id="as-clear" type="button">ล้างผลการดำเนินงานทั้งหมด</button>
+      </div>
+      <div id="assessment-list"></div>
+    </section>
+
+    <!-- รายงาน -->
+    <section id="page-reports" class="page" hidden>
+      <h1>รายงานผลการประเมินตนเอง (SAR)</h1>
+      <p class="lead">ร่างสรุปผลรายมาตรฐานสร้างจากข้อมูลผลการประเมินและคลังหลักฐาน ใช้เป็นตั้งต้นในการเขียน SAR ฉบับสมบูรณ์</p>
+      <div class="toolbar"><button class="btn primary" id="print-sar" type="button">พิมพ์ / บันทึกเป็น PDF</button></div>
+      <article class="panel sar" id="sar"></article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p><span class="school-name"></span> · ระบบประกันคุณภาพภายในสถานศึกษา (ต้นแบบ)</p>
+    </div>
+  </footer>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
