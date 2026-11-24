@@ -20,6 +20,7 @@
           <small id="school-name"></small>
         </span>
       </a>
+      <div id="auth-area" class="auth-area"></div>
       <button class="nav-toggle" aria-expanded="false" aria-controls="nav">เมนู</button>
       <nav id="nav" class="nav">
         <a href="#home">หน้าแรก</a>
@@ -47,6 +48,7 @@
         </div>
       </div>
       <div class="stats" id="home-stats"></div>
+      <p class="notice" id="home-locked" hidden>เข้าสู่ระบบด้วยบัญชี @<span class="domain"></span> เพื่อดูข้อมูลหลักฐานและผลการประเมิน</p>
       <h2>ภาพรวมรายมาตรฐาน</h2>
       <div class="cards" id="home-standards"></div>
       <h2>ขั้นตอนประกันคุณภาพภายใน</h2>
@@ -106,7 +108,8 @@
     <section id="page-evidence" class="page" hidden>
       <h1>คลังหลักฐานเชิงประจักษ์</h1>
       <p class="lead">บันทึกหลักฐานตามประเด็นพิจารณาและขั้น PDCA ระบบสร้างรหัสหลักฐานให้อัตโนมัติ</p>
-      <div class="notice">ข้อมูลถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น — ใช้ปุ่ม "ส่งออก" เพื่อสำรองหรือส่งต่อ</div>
+      <div class="notice local-only">โหมดทดลอง: ข้อมูลถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น — ใช้ปุ่ม "ส่งออก" เพื่อสำรองหรือส่งต่อ</div>
+      <div class="notice remote-only" hidden>ข้อมูลบันทึกลง Google Sheets ของโรงเรียน ทุกคนที่เข้าสู่ระบบเห็นข้อมูลชุดเดียวกัน</div>
       <form id="evidence-form" class="panel form-grid">
         <label class="span-2">ชื่อหลักฐาน
           <input name="title" required placeholder="เช่น รายงานผลโครงการค่ายวิทยาศาสตร์ ม.4">
@@ -141,7 +144,7 @@
         </select>
         <button class="btn" id="ev-export-csv" type="button">ส่งออก CSV</button>
         <button class="btn" id="ev-export-json" type="button">ส่งออก JSON</button>
-        <label class="btn file-btn">นำเข้า JSON<input id="ev-import" type="file" accept="application/json" hidden></label>
+        <label class="btn file-btn" id="ev-import-label">นำเข้า JSON<input id="ev-import" type="file" accept="application/json" hidden></label>
       </div>
       <div class="table-wrap">
         <table id="evidence-table">
@@ -157,12 +160,23 @@
     <section id="page-assessment" class="page" hidden>
       <h1>ผลการประเมินคุณภาพภายใน</h1>
       <p class="lead">กรอกผลการดำเนินงาน ระบบเสนอระดับคุณภาพเบื้องต้นจากค่าเป้าหมาย แล้วให้คณะกรรมการตัดสินระดับสุดท้าย (ระดับ 5 ยอดเยี่ยม ต้องตัดสินโดยคณะกรรมการ)</p>
-      <div class="notice warn">ค่าเป้าหมายและผลการดำเนินงานที่แสดงเป็น <strong>ข้อมูลตัวอย่าง</strong> — แก้ไขให้เป็นค่าจริงของโรงเรียน</div>
+      <div class="notice warn local-only">โหมดทดลอง: ค่าเป้าหมายและผลการดำเนินงานที่แสดงเป็น <strong>ข้อมูลตัวอย่าง</strong></div>
+      <div class="notice warn remote-only" hidden>ค่าเป้าหมายใน <code>assets/js/data.js</code> ยังเป็นข้อมูลตัวอย่าง — ปรับให้เป็นค่าที่โรงเรียนประกาศ</div>
+      <div class="notice" id="as-readonly" hidden>บทบาทของคุณดูผลได้อย่างเดียว — การบันทึกผลและตัดสินระดับทำได้เฉพาะกรรมการประเมินและผู้ดูแลระบบ</div>
       <div class="toolbar">
         <button class="btn" id="as-reset" type="button">คืนค่าข้อมูลตัวอย่าง</button>
         <button class="btn" id="as-clear" type="button">ล้างผลการดำเนินงานทั้งหมด</button>
       </div>
       <div id="assessment-list"></div>
+    </section>
+
+    <!-- เข้าสู่ระบบ -->
+    <section id="page-login" class="page" hidden>
+      <div class="panel login-panel">
+        <h1>เข้าสู่ระบบ</h1>
+        <p class="lead">หน้านี้ใช้ได้เฉพาะครูและบุคลากรที่ใช้บัญชี Google ของโรงเรียน (@<span class="domain"></span>)</p>
+        <div id="gsi-page"></div>
+      </div>
     </section>
 
     <!-- รายงาน -->
@@ -180,7 +194,11 @@
     </div>
   </footer>
 
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="assets/js/config.js"></script>
   <script src="assets/js/data.js"></script>
+  <script src="assets/js/store.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>
