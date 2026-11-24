@@ -423,6 +423,26 @@ details.std .hint { margin: .75rem 1.5rem 1.25rem; }
   .as-verdict { grid-template-columns: 1fr; }
 }
 
+/* criteria, checklist, rubric, status */
+.criteria { margin: 0 1.5rem 1rem; font-size: .88rem; color: var(--muted); display: flex; flex-direction: column; gap: .15rem; }
+.as-criteria { margin: .85rem 1.5rem 0; }
+.as-issue-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.as-issue-head small { display: block; }
+.as-score { display: flex; align-items: center; gap: .6rem; }
+.issue-cell small { display: block; margin-top: .25rem; font-weight: 400; }
+.checklist { list-style: none; margin: .25rem 0 0; padding: 0; display: grid; gap: .35rem; }
+.check { flex-direction: row; align-items: flex-start; gap: .65rem; font-weight: 400; font-size: .92rem; line-height: 1.6; padding: .45rem .6rem; border-radius: var(--r-sm); cursor: pointer; }
+.check:hover { background: var(--paper); }
+.check input { width: 1.05rem; height: 1.05rem; margin-top: .3rem; flex: none; accent-color: var(--ink); }
+.check .code { margin-right: .25rem; }
+.rubric .badge { margin-right: .35rem; vertical-align: 1px; }
+.rubric-list { margin: 0; padding-left: 0; list-style: none; display: grid; gap: .35rem; font-size: .88rem; }
+.rubric-list b { display: inline-block; min-width: 5.5rem; color: var(--ink-2); font-weight: 600; }
+.status { font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.status.ok { color: var(--lv4); }
+.status.miss { color: var(--danger); }
+.as-ind-input small { color: var(--muted); }
+
 /* =====================================================================
    SAR
    ===================================================================== */
@@ -431,7 +451,8 @@ details.std .hint { margin: .75rem 1.5rem 1.25rem; }
 .sar-head h2 { margin: 0; font-size: 1.5rem; }
 .sar-head p { margin: .25rem 0 0; color: var(--muted); }
 .sar > h3 { margin-top: 0; }
-.sar table { margin-bottom: 2rem; border: 1px solid var(--line); }
+.sar table { border: 0; }
+.sar-summary { margin-bottom: 2rem; }
 .sar-std { margin-top: 2rem; }
 .sar-std > h3 { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding-bottom: .5rem; border-bottom: 1px solid var(--line-strong); }
 .sar-issue { padding: .9rem 0; border-bottom: 1px solid var(--line); }

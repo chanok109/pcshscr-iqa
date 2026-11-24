@@ -57,39 +57,66 @@
     }
   }
 
-  // ---------- ระดับคุณภาพ ----------
-  function suggestLevel(result, target, kind) {
-    if (result === "" || result == null || isNaN(result) || !target) return null;
-    if (kind === "level") return Math.min(5, Math.max(1, Math.round(Number(result))));
-    const ratio = Number(result) / Number(target);
-    const hit = D.levels.filter((l) => l.minRatio != null).sort((a, b) => b.minRatio - a.minRatio).find((l) => ratio >= l.minRatio);
-    return hit ? hit.level : 1;
+  // ---------- ระดับคุณภาพ (ตามประกาศค่าเป้าหมายของโรงเรียน) ----------
+  const PY = D.school.previousYear;
+  const stdOf = Object.fromEntries(issues.map((i) => [i.code, i.std]));
+  const has = (v) => v !== "" && v != null && !isNaN(v);
+  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const band = (bands, value) => (value == null ? null : (bands.find((b) => value >= b.min) || bands[bands.length - 1]).level);
+  const itemsOf = (issue) => issue.indicators || issue.checklist || issue.rubric || [];
+
+  // ร้อยละความสำเร็จเทียบกับค่าเป้าหมาย (ไม่เกิน 100) — ใช้กับมาตรฐานแบบ achievement
+  function achievement(ind, v) {
+    if (!has(v) || !ind.target) return null;
+    v = Number(v);
+    if (ind.dir === "min") return v <= ind.target ? 100 : (ind.target / v) * 100;
+    return Math.min(100, (v / ind.target) * 100);
   }
-  // ตามวิธีใน SAR: เทียบค่าเฉลี่ยผลของตัวชี้วัดย่อยกับค่าเฉลี่ยค่าเป้าหมาย (ตัวชี้วัดแบบร้อยละ)
-  // ตัวชี้วัดแบบระดับคุณภาพ ใช้ค่าเฉลี่ยของระดับ
-  function issueSuggested(issue, results = S.results) {
-    const rows = issue.indicators.map((ind, idx) => ({ ind, v: results[indKey(issue, idx)] }))
-      .filter(({ v }) => v !== "" && v != null && !isNaN(v));
-    if (!rows.length) return null;
-    if (rows.every(({ ind }) => ind.kind === "level")) {
-      return Math.round(rows.reduce((a, { v }) => a + Number(v), 0) / rows.length);
+  const metTarget = (ind, v) => (has(v) ? (ind.dir === "min" ? Number(v) <= ind.target : Number(v) >= ind.target) : null);
+
+  // ผลรายประเด็น: { value, label, level }
+  function issueScore(issue, results = S.results) {
+    const std = stdOf[issue.code];
+    if (issue.checklist) {
+      const vals = issue.checklist.map((_, k) => results[indKey(issue, k)]);
+      if (!vals.some(has)) return { value: null, level: null };
+      const count = vals.filter((v) => Number(v) === 1).length;
+      return { value: count, label: `${count}/${issue.checklist.length} ข้อ`, level: Math.max(1, count) };
     }
-    const pct = rows.filter(({ ind }) => ind.kind !== "level");
-    const meanR = pct.reduce((a, { v }) => a + Number(v), 0) / pct.length;
-    const meanT = pct.reduce((a, { ind }) => a + ind.target, 0) / pct.length;
-    return suggestLevel(meanR, meanT, "percent");
+    if (issue.rubric) {
+      const v = results[indKey(issue, 0)];
+      return has(v) ? { value: Number(v), label: `ระดับ ${v}`, level: Number(v) } : { value: null, level: null };
+    }
+    if (std.method === "achievement") {
+      const value = mean(issue.indicators.map((ind, k) => achievement(ind, results[indKey(issue, k)])).filter((x) => x != null));
+      return { value, label: value == null ? "" : `สำเร็จ ${fmt(value)}%`, level: band(std.bands, value) };
+    }
+    const value = mean(issue.indicators.map((_, k) => results[indKey(issue, k)]).filter(has).map(Number));
+    return { value, label: value == null ? "" : `ร้อยละ ${fmt(value)}`, level: band(std.bands, value) };
   }
+  const issueSuggested = (issue) => issueScore(issue).level;
   function issueLevel(issue) {
     const v = S.verdicts[issue.code];
     return v ? Number(v) : issueSuggested(issue);
   }
-  function standardLevel(std) {
-    const lv = std.issues.map(issueLevel).filter((x) => x != null);
-    return lv.length ? Math.round(lv.reduce((a, b) => a + b, 0) / lv.length) : null;
+  // ผลรายมาตรฐาน: { label, level }
+  function standardScore(std) {
+    if (std.method === "checklist") {
+      const lv = std.issues.map(issueLevel).filter((x) => x != null);
+      if (!lv.length) return { label: "", level: null };
+      const total = lv.reduce((a, b) => a + b, 0);
+      return { label: `คะแนน ${total}/${std.issues.length * 5}`, level: band(std.scoreBands, total) };
+    }
+    const value = mean(std.issues.map((i) => issueScore(i).value).filter((x) => x != null));
+    if (value == null) return { label: "", level: null };
+    return { label: std.method === "achievement" ? `สำเร็จ ${fmt(value)}%` : `ร้อยละ ${fmt(value)}`, level: band(std.bands, value) };
   }
-  const fmt = (v) => (v === "" || v == null ? "—" : Number(v).toLocaleString("th-TH", { maximumFractionDigits: 2 }));
-  const fmtInd = (ind, v) => (ind.kind === "level" ? (v ? levelInfo(Number(v)).name : "—") : fmt(v));
-  const PY = D.school.previousYear;
+  const standardLevel = (std) => standardScore(std).level;
+  const issueTarget = (issue) => (issue.indicators && stdOf[issue.code].method === "percent" ? mean(issue.indicators.map((x) => x.target)) : null);
+
+  function fmt(v) { return v === "" || v == null ? "—" : Number(v).toLocaleString("th-TH", { maximumFractionDigits: 2 }); }
+  const fmtInd = (ind, v) => (v === "" || v == null ? "—" : ind.unit && ind.unit !== "%" ? `${fmt(v)} ${ind.unit}` : fmt(v));
+  const fmtTarget = (ind) => (ind.dir === "min" ? `≤ ${fmtInd(ind, ind.target)}` : fmtInd(ind, ind.target));
 
   function levelBadge(n) {
     if (!n) return `<span class="badge lv0">ยังไม่ประเมิน</span>`;
@@ -199,7 +226,7 @@
         <span class="std-name">${esc(s.name)}</span>
         <span class="meter" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<i class="${lv && n <= lv ? "lv" + lv : ""}"></i>`).join("")}</span>
         ${levelBadge(lv)}
-        <span class="std-prev">ปี ${PY}: ${s.prev ? esc(levelInfo(s.prev.level).name) : "—"}</span>
+        <span class="std-prev">เป้าหมาย ${esc(s.targetText || "—")}<br>ปี ${PY}: ${s.prev ? esc(levelInfo(s.prev.level).name) : "—"}</span>
       </a>`;
     }).join("");
 
@@ -236,29 +263,46 @@
   function renderStandards() {
     const list = (title, items) => items && items.length
       ? `<div><h4>${title}</h4><ol>${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ol></div>` : "";
+    const rows = (s, i) => {
+      if (i.checklist) {
+        return i.checklist.map((t, k) => `<tr>${k === 0 ? `<td rowspan="${i.checklist.length}" class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>` : ""}
+          <td>${i.code}.${k + 1} ${esc(t)}</td>${k === 0 ? `<td rowspan="${i.checklist.length}" class="num">ยอดเยี่ยม<br><small class="hint">ครบ 5 ข้อ</small></td><td rowspan="${i.checklist.length}" class="num">${i.prevLevel ? esc(levelInfo(i.prevLevel).name) : "—"}</td>` : ""}</tr>`).join("");
+      }
+      if (i.rubric) {
+        return `<tr><td class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>
+          <td><ol class="rubric-list" reversed>${i.rubric.slice().reverse().map((t, k) => `<li><b>${esc(levelInfo(5 - k).name)}</b> ${esc(t)}</li>`).join("")}</ol></td>
+          <td class="num">ยอดเยี่ยม</td><td class="num">${i.prevLevel ? esc(levelInfo(i.prevLevel).name) : "—"}</td></tr>`;
+      }
+      const it = issueTarget(i);
+      return i.indicators.map((ind, k) => {
+        const below = ind.prev != null && metTarget(ind, ind.prev) === false;
+        return `<tr>${k === 0 ? `<td rowspan="${i.indicators.length}" class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}${it != null ? `<small class="hint">เป้าหมายประเด็น ร้อยละ ${fmt(it)}</small>` : ""}</td>` : ""}
+          <td>${esc(ind.name)}</td><td class="num">${fmtTarget(ind)}</td>
+          <td class="num ${below ? "below" : ""}">${ind.prev == null ? `<span class="hint">ตัวชี้วัดใหม่</span>` : fmtInd(ind, ind.prev)}</td></tr>`;
+      }).join("");
+    };
     $("#standards-list").innerHTML = D.standards.map((s) => `
       <details class="panel std" ${s.code === "1" ? "open" : ""}>
         <summary><span class="std-no">มาตรฐานที่ ${s.code}</span> ${esc(s.name)} <small>${s.issues.length} ประเด็น</small></summary>
         <div class="std-meta">
+          <div><span class="meta-k">ค่าเป้าหมายปี ${AY}</span><strong>${esc(s.targetText || "—")}</strong></div>
           <div><span class="meta-k">นวัตกรรม/วิธีปฏิบัติที่เป็นเลิศ</span><strong>${esc(s.model || "—")}</strong></div>
-          <div><span class="meta-k">จุดเน้น</span><span>${esc(s.focus || "—")}</span></div>
           <div><span class="meta-k">ผลปี ${PY}</span>${s.prev ? levelBadge(s.prev.level) : "—"}</div>
         </div>
+        <p class="criteria"><span class="meta-k">เกณฑ์การตัดสิน</span>${esc(s.criteria || "")}</p>
         <div class="table-wrap"><table>
-          <thead><tr><th>ประเด็น</th><th>ตัวชี้วัด</th><th class="num">ค่าเป้าหมาย</th><th class="num">ผลปี ${PY}</th></tr></thead>
-          <tbody>${s.issues.map((i) => i.indicators.map((ind, idx) => {
-            const below = ind.kind !== "level" && ind.prev < ind.target;
-            return `<tr>${idx === 0 ? `<td rowspan="${i.indicators.length}" class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>` : ""}
-            <td>${esc(ind.name)}</td><td class="num">${fmtInd(ind, ind.target)}</td>
-            <td class="num ${below ? "below" : ""}">${fmtInd(ind, ind.prev)}</td></tr>`;
-          }).join("")).join("")}
-          </tbody></table></div>
+          <thead><tr><th>ประเด็น</th><th>${s.method === "checklist" ? "รายการประเมิน" : "ตัวชี้วัด"}</th><th class="num">ค่าเป้าหมายปี ${AY}</th><th class="num">ผลปี ${PY}</th></tr></thead>
+          <tbody>${s.issues.map((i) => rows(s, i)).join("")}</tbody></table></div>
         ${s.review ? `<div class="review"><p class="review-title">สรุปจาก SAR ปีการศึกษา ${PY}</p>
           <div class="review-grid">${list("จุดเด่น", s.review.strengths)}${list("จุดที่ควรพัฒนา", s.review.improve)}${list("ข้อเสนอแนะ", s.review.suggest)}</div></div>` : ""}
       </details>`).join("");
 
-    $("#levels-legend").innerHTML = D.levels.map((l) =>
-      `<div class="level-item">${levelBadge(l.level)}<p>${esc(l.desc)}</p></div>`).join("");
+    $("#levels-legend").innerHTML = `
+      <div class="level-item">${levelBadge(5)}<p>มาตรฐานที่ 1, 3: ร้อยละ 90 ขึ้นไป<br>มาตรฐานที่ 2: 5 ข้อ / คะแนนรวม 25–40<br>มาตรฐานที่ 4: สำเร็จร้อยละ 90 ขึ้นไป</p></div>
+      <div class="level-item">${levelBadge(4)}<p>ร้อยละ 80–89.99<br>4 ข้อ / คะแนนรวม 20–24<br>สำเร็จร้อยละ 80–89.99</p></div>
+      <div class="level-item">${levelBadge(3)}<p>ร้อยละ 70–79.99<br>3 ข้อ / คะแนนรวม 14–19<br>สำเร็จร้อยละ 70–79.99</p></div>
+      <div class="level-item">${levelBadge(2)}<p>ร้อยละ 60–69.99<br>2 ข้อ / คะแนนรวม 8–13<br>สำเร็จร้อยละ 60–69.99</p></div>
+      <div class="level-item">${levelBadge(1)}<p>ต่ำกว่าร้อยละ 60<br>1 ข้อ / คะแนนรวม 0–7<br>สำเร็จต่ำกว่าร้อยละ 60</p></div>`;
   }
 
   // ---------- กระบวนการ ----------
@@ -391,35 +435,56 @@
     const editable = can("assess");
     const dis = editable ? "" : "disabled";
     $("#as-readonly").hidden = editable;
-    $("#assessment-list").innerHTML = D.standards.map((s) => `
+
+    const body = (s, i) => {
+      if (i.checklist) {
+        return `<ul class="checklist">${i.checklist.map((t, k) => {
+          const key = indKey(i, k);
+          return `<li><label class="check"><input type="checkbox" data-result="${key}" ${Number(S.results[key]) === 1 ? "checked" : ""} ${dis}>
+            <span><span class="code">${i.code}.${k + 1}</span> ${esc(t)}</span></label></li>`;
+        }).join("")}</ul>`;
+      }
+      if (i.rubric) {
+        const key = indKey(i, 0);
+        return `<ul class="checklist rubric">${i.rubric.map((t, k) => ({ t, lv: k + 1 })).reverse().map(({ t, lv }) =>
+          `<li><label class="check"><input type="radio" name="rb-${i.code}" data-result="${key}" value="${lv}" ${String(S.results[key]) === String(lv) ? "checked" : ""} ${dis}>
+            <span>${levelBadge(lv)} ${esc(t)}</span></label></li>`).join("")}</ul>`;
+      }
+      return i.indicators.map((ind, k) => {
+        const key = indKey(i, k);
+        const v = S.results[key] ?? "";
+        const ok = metTarget(ind, v);
+        const pct = !has(v) ? 0 : ind.dir === "min" ? Math.min(120, achievement(ind, v)) : Math.min(120, (Number(v) / ind.target) * 100);
+        return `<div class="as-ind">
+          <span class="as-ind-name">${esc(ind.name)}</span>
+          <span class="as-ind-target">เป้าหมาย <b>${fmtTarget(ind)}</b><small>ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)}</small></span>
+          <label class="as-ind-input">ผล <input type="number" step="any" min="0" data-result="${key}" value="${esc(v)}" ${dis}>${ind.unit && ind.unit !== "%" ? `<small>${esc(ind.unit)}</small>` : ""}</label>
+          <span class="bar ${ok === false ? "miss" : ""}" aria-hidden="true"><i class="${ok == null ? "" : ok ? "lv5" : "lv1"}" style="width:${pct / 1.2}%"></i><em></em></span>
+          <span class="status ${ok == null ? "" : ok ? "ok" : "miss"}">${ok == null ? "" : ok ? "บรรลุเป้าหมาย" : "ต่ำกว่าเป้าหมาย"}</span>
+        </div>`;
+      }).join("");
+    };
+
+    $("#assessment-list").innerHTML = D.standards.map((s) => {
+      const ss = standardScore(s);
+      return `
       <div class="panel as-std">
         <div class="as-head"><h2><span class="std-no">มาตรฐานที่ ${s.code}</span> ${esc(s.name)}</h2>
-          <div>${levelBadge(standardLevel(s))}</div></div>
+          <div class="as-score"><span class="hint">${esc(ss.label)}</span>${levelBadge(ss.level)}</div></div>
+        <p class="criteria as-criteria">${esc(s.criteria || "")}</p>
         ${s.issues.map((i) => {
-          const sug = issueSuggested(i);
+          const sc = issueScore(i);
+          const it = issueTarget(i);
           const n = S.notes[i.code] || {};
           return `<div class="as-issue">
-            <div class="as-issue-head"><span class="code">${i.code}</span> <strong>${esc(i.name)}</strong></div>
-            ${i.indicators.map((ind, idx) => {
-              const k = indKey(i, idx);
-              const v = S.results[k] ?? "";
-              const lv = suggestLevel(v, ind.target, ind.kind);
-              const pct = v === "" ? 0 : Math.min(120, (Number(v) / ind.target) * 100);
-              const input = ind.kind === "level"
-                ? `<select data-result="${k}" ${dis}><option value="">—</option>${D.levels.map((l) => `<option value="${l.level}" ${String(v) === String(l.level) ? "selected" : ""}>${l.level} ${esc(l.name)}</option>`).join("")}</select>`
-                : `<input type="number" step="any" min="0" data-result="${k}" value="${esc(v)}" ${dis}>`;
-              return `<div class="as-ind">
-                <span class="as-ind-name">${esc(ind.name)}</span>
-                <span class="as-ind-target">เป้าหมาย <b>${fmtInd(ind, ind.target)}</b><small>ปี ${PY}: ${fmtInd(ind, ind.prev)}</small></span>
-                <label class="as-ind-input">ผล ${input}</label>
-                <span class="bar" aria-hidden="true"><i class="lv${lv || 0}" style="width:${pct / 1.2}%"></i><em></em></span>
-                <span>${levelBadge(lv)}</span>
-              </div>`;
-            }).join("")}
+            <div class="as-issue-head"><div><span class="code">${i.code}</span> <strong>${esc(i.name)}</strong>
+              ${it != null ? `<small class="hint">เป้าหมายประเด็น ร้อยละ ${fmt(it)}</small>` : ""}</div>
+              <div class="as-score"><span class="hint">${esc(sc.label || "")}</span>${levelBadge(issueLevel(i))}</div></div>
+            ${body(s, i)}
             <div class="as-verdict">
               <label>ระดับที่คณะกรรมการตัดสิน
                 <select data-verdict="${i.code}" ${dis}>
-                  <option value="">ตามที่ระบบเสนอ (${sug ? sug + " " + levelInfo(sug).name : "—"})</option>
+                  <option value="">ตามเกณฑ์ (${sc.level ? sc.level + " " + levelInfo(sc.level).name : "—"})</option>
                   ${D.levels.map((l) => `<option value="${l.level}" ${String(S.verdicts[i.code]) === String(l.level) ? "selected" : ""}>${l.level} ${esc(l.name)}</option>`).join("")}
                 </select>
               </label>
@@ -428,7 +493,8 @@
             </div>
           </div>`;
         }).join("")}
-      </div>`).join("");
+      </div>`;
+    }).join("");
   }
 
   function initAssessment() {
@@ -437,7 +503,7 @@
       const t = e.target;
       try {
         if (t.dataset.result) {
-          const value = t.value === "" ? "" : Number(t.value);
+          const value = t.type === "checkbox" ? (t.checked ? 1 : 0) : t.value === "" ? "" : Number(t.value);
           await run(() => store.setResult(t.dataset.result, value), "บันทึกผลแล้ว");
           S.results[t.dataset.result] = value;
           renderAssessment();
@@ -481,9 +547,9 @@
         <p>${esc(D.school.name)}<br>ปีการศึกษา ${AY}</p>
       </header>
       <h3>สรุปผลการประเมินรายมาตรฐาน</h3>
-      <table><thead><tr><th>มาตรฐาน</th><th>ระดับคุณภาพ</th></tr></thead><tbody>
-        ${D.standards.map((s) => `<tr><td>มาตรฐานที่ ${s.code} ${esc(s.name)}</td><td>${levelBadge(standardLevel(s))}</td></tr>`).join("")}
-      </tbody></table>
+      <div class="table-wrap sar-summary"><table><thead><tr><th>มาตรฐาน</th><th>ค่าเป้าหมาย</th><th>ผลการประเมิน</th><th>ระดับคุณภาพ</th></tr></thead><tbody>
+        ${D.standards.map((s) => { const ss = standardScore(s); return `<tr><td>มาตรฐานที่ ${s.code} ${esc(s.name)}</td><td>${esc(s.targetText || "")}</td><td>${esc(ss.label)}</td><td>${levelBadge(ss.level)}</td></tr>`; }).join("")}
+      </tbody></table></div>
       ${D.standards.map((s) => `
         <section class="sar-std">
           <h3>มาตรฐานที่ ${s.code} ${esc(s.name)} — ${levelBadge(standardLevel(s))}</h3>
@@ -492,9 +558,11 @@
             const evs = S.evidence.filter((e) => e.issue === i.code);
             return `<div class="sar-issue">
               <h4>${i.code} ${esc(i.name)} ${levelBadge(issueLevel(i))}</h4>
-              <ul>${i.indicators.map((ind, idx) => {
+              <ul>${i.checklist ? i.checklist.map((t, k) => `<li>${Number(S.results[indKey(i, k)]) === 1 ? "✓" : "–"} ${esc(t)}</li>`).join("")
+                : i.rubric ? `<li>${has(S.results[indKey(i, 0)]) ? esc(i.rubric[Number(S.results[indKey(i, 0)]) - 1]) : "ยังไม่ประเมิน"}</li>`
+                : i.indicators.map((ind, idx) => {
                 const v = S.results[indKey(i, idx)];
-                return `<li>${esc(ind.name)}: ผล ${fmtInd(ind, v)} / เป้าหมาย ${fmtInd(ind, ind.target)} <span class="hint">(ปี ${PY}: ${fmtInd(ind, ind.prev)})</span></li>`;
+                return `<li>${esc(ind.name)}: ผล ${fmtInd(ind, v)} / เป้าหมาย ${fmtTarget(ind)} <span class="hint">(ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)})</span></li>`;
               }).join("")}</ul>
               ${n.strengths ? `<p><b>จุดเด่น:</b> ${esc(n.strengths)}</p>` : ""}
               ${n.improve ? `<p><b>จุดที่ควรพัฒนา:</b> ${esc(n.improve)}</p>` : ""}
