@@ -251,6 +251,48 @@
       `<li><span class="seq-no">${p.step}</span><span class="phase ph-${p.phase}">${p.phase}</span><span class="seq-title">${esc(p.title)}</span></li>`).join("");
   }
 
+  // ---------- ข้อมูลโรงเรียน ----------
+  function renderSchool() {
+    const sc = D.school;
+    $("#school-profile").innerHTML = [...sc.profile, ["คำขวัญ", sc.motto], ["ปรัชญา", sc.philosophy], ["วิสัยทัศน์", sc.vision],
+      ["เอกลักษณ์ของโรงเรียน", sc.schoolIdentity], ["อัตลักษณ์ของนักเรียน", sc.studentIdentity]]
+      .map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td>${esc(v)}</td></tr>`).join("");
+
+    $("#school-symbols").innerHTML = `
+      <section class="panel sym">
+        <h3>สีประจำโรงเรียน</h3>
+        <div class="swatches">${sc.colors.map((c) => `<div class="swatch"><i style="background:${c.hex}"></i><div><strong>${esc(c.name)}</strong><span>${esc(c.meaning)}</span></div></div>`).join("")}</div>
+      </section>
+      <section class="panel sym">
+        <h3>ค่านิยมองค์กร ${esc(sc.values.name)}</h3>
+        <dl class="values">${sc.values.items.map(([l, en, th]) => `<div><dt>${esc(l)}</dt><dd><strong>${esc(en)}</strong><span>${esc(th)}</span></dd></div>`).join("")}</dl>
+      </section>
+      <section class="panel sym">
+        <h3>ตราประจำโรงเรียน</h3>
+        <p>${esc(sc.crest[0])}</p>
+        <ul>${sc.crest.slice(1).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+      </section>
+      <section class="panel sym">
+        <h3>ต้นไม้ประจำโรงเรียน: ${esc(sc.tree.name)}</h3>
+        <dl class="facts">${sc.tree.facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
+      </section>`;
+
+    const A = D.admin;
+    $("#admin-structure").innerHTML = `
+      <div class="admin">
+        <div class="admin-top">
+          <ul class="admin-side">${A.boards.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+          <div class="admin-head">${esc(A.head)}</div>
+          <ul class="admin-side partners">${A.partners.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+        </div>
+        <ol class="admin-groups">${A.groups.map((g) => `
+          <li class="admin-group"><h3>${esc(g.name)}</h3>
+            ${g.sections.map((sec) => `<div class="admin-sec"><h4>${esc(sec.name)}</h4>
+              <ol>${sec.units.map((u) => `<li class="${/ประกันคุณภาพ/.test(u) ? "hl" : ""}">${esc(u)}</li>`).join("")}</ol></div>`).join("")}
+          </li>`).join("")}</ol>
+      </div>`;
+  }
+
   // ---------- โครงสร้าง ----------
   function renderStructure() {
     $("#org-standards").innerHTML = D.standards.map((s) =>
@@ -574,7 +616,7 @@
 
   // ---------- routing ----------
   const RENDER = {
-    home: renderHome, structure: renderStructure, standards: renderStandards, process: renderProcess,
+    home: renderHome, school: renderSchool, structure: renderStructure, standards: renderStandards, process: renderProcess,
     evidence: renderEvidence, assessment: renderAssessment, reports: renderSar,
   };
 
