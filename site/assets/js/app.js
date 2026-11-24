@@ -78,7 +78,7 @@
   }
   function levelBadge(n) {
     if (!n) return `<span class="badge lv0">ยังไม่ประเมิน</span>`;
-    return `<span class="badge lv${n}">${n} · ${esc(levelInfo(n).name)}</span>`;
+    return `<span class="badge lv${n}"><b>${n}</b>${esc(levelInfo(n).name)}</span>`;
   }
 
   function download(name, text, type) {
@@ -121,33 +121,82 @@
   }
 
   // ---------- หน้าแรก ----------
+  const TH_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+  const PHASE_ARC = { P: [-90, 0], D: [0, 90], C: [90, 180], A: [180, 270] };
+
+  function inMonths(m, [a, b]) { return a <= b ? m >= a && m <= b : m >= a || m <= b; }
+
+  function polar(r, deg) {
+    const t = (deg * Math.PI) / 180;
+    return [160 + r * Math.cos(t), 160 + r * Math.sin(t)];
+  }
+
+  // วงจร PDCA พร้อมตำแหน่งปัจจุบันของปีการศึกษา (คำนวณจากเดือนปัจจุบันกับปฏิทินใน data.js)
+  function renderCycle() {
+    const month = new Date().getMonth() + 1;
+    const now = D.calendar.filter((c) => c.months && inMonths(month, c.months));
+    const active = new Set(now.flatMap((c) => c.steps));
+    const activePhases = new Set(D.pdca.filter((p) => active.has(p.step)).map((p) => p.phase));
+
+    // วางขั้นตอนบนวง: กระจายขั้นของแต่ละ phase ให้เท่ากันภายในส่วนโค้งของ phase นั้น
+    const marks = [];
+    Object.entries(PHASE_ARC).forEach(([ph, [a, b]]) => {
+      const steps = D.pdca.filter((p) => p.phase === ph);
+      steps.forEach((p, i) => marks.push({ p, deg: a + ((b - a) * (i + 1)) / (steps.length + 1) }));
+    });
+
+    const R = 118;
+    const arcs = Object.entries(PHASE_ARC).map(([ph, [a, b]], i) => {
+      const [x1, y1] = polar(R, a + 3);
+      const [x2, y2] = polar(R, b - 3);
+      const [lx, ly] = polar(R + 30, (a + b) / 2);
+      return `<path class="arc ${activePhases.has(ph) ? "on" : ""}" style="--i:${i}" pathLength="1" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}"/>
+        <text class="arc-label ${activePhases.has(ph) ? "on" : ""}" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}">${ph}</text>`;
+    }).join("");
+    const dots = marks.map(({ p, deg }) => {
+      const [x, y] = polar(R, deg);
+      return `<g class="mark ${active.has(p.step) ? "on" : ""}"><title>ขั้นที่ ${p.step} ${esc(p.title)}</title>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13"/><text x="${x.toFixed(1)}" y="${y.toFixed(1)}">${p.step}</text></g>`;
+    }).join("");
+
+    const stepNames = D.pdca.filter((p) => active.has(p.step));
+    $("#cycle").innerHTML = `
+      <svg viewBox="0 0 320 320" role="img" aria-label="วงจร PDCA ของปีการศึกษา">
+        <circle class="orbit" cx="160" cy="160" r="${R - 26}"/>
+        ${arcs}${dots}
+        <text class="c-small" x="160" y="138">ขณะนี้</text>
+        <text class="c-month" x="160" y="168">${TH_MONTHS[month - 1]}</text>
+        <text class="c-small" x="160" y="194">${stepNames.length ? "ขั้นที่ " + stepNames.map((p) => p.step).join(" และ ") : ""}</text>
+      </svg>
+      <figcaption id="cycle-caption">${now.length ? now.map((c) => esc(c.activity)).join("<br>") : "ดูปฏิทินการดำเนินงานในหน้ากระบวนการ"}</figcaption>`;
+  }
+
   function renderHome() {
     const ev = S.evidence;
     const assessed = issues.filter((i) => issueLevel(i) != null).length;
     const covered = issues.filter((i) => ev.some((e) => e.issue === i.code)).length;
     const locked = store.mode === "remote" && !signedIn();
-    $("#home-stats").innerHTML = [
-      ["มาตรฐาน", D.standards.length],
-      ["ประเด็นพิจารณา", issues.length],
-      ["หลักฐานในคลัง", locked ? "—" : ev.length],
-      ["ประเด็นที่มีหลักฐาน", locked ? "—" : `${covered}/${issues.length}`],
-      ["ประเด็นที่ประเมินแล้ว", locked ? "—" : `${assessed}/${issues.length}`],
-    ].map(([k, v]) => `<div class="stat"><span>${k}</span><strong>${v}</strong></div>`).join("");
-    $("#home-locked").hidden = !locked;
+    renderCycle();
 
     $("#home-standards").innerHTML = D.standards.map((s) => {
       const lv = locked ? null : standardLevel(s);
-      return `<a class="card std-card" href="#assessment">
+      return `<a class="std-cell" href="#assessment">
         <span class="std-no">มาตรฐานที่ ${s.code}</span>
-        <h3>${esc(s.name)}</h3>
-        <div class="meter" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<i class="${lv && n <= lv ? "lv" + lv : ""}"></i>`).join("")}</div>
+        <span class="std-name">${esc(s.name)}</span>
+        <span class="meter" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<i class="${lv && n <= lv ? "lv" + lv : ""}"></i>`).join("")}</span>
         ${levelBadge(lv)}
-        <small>${s.issues.length} ประเด็นพิจารณา</small>
       </a>`;
     }).join("");
 
+    $("#home-stats").innerHTML = [
+      [locked ? "—" : ev.length, "หลักฐานในคลัง"],
+      [locked ? "—" : `${covered}/${issues.length}`, "ประเด็นที่มีหลักฐาน"],
+      [locked ? "—" : `${assessed}/${issues.length}`, "ประเด็นที่ประเมินแล้ว"],
+    ].map(([v, k]) => `<div class="stat"><strong>${v}</strong><span>${k}</span></div>`).join("");
+    $("#home-locked").hidden = !locked;
+
     $("#home-steps").innerHTML = D.pdca.map((p) =>
-      `<li><span class="phase ph-${p.phase}">${p.phase}</span><span>${esc(p.title)}</span></li>`).join("");
+      `<li><span class="seq-no">${p.step}</span><span class="phase ph-${p.phase}">${p.phase}</span><span class="seq-title">${esc(p.title)}</span></li>`).join("");
   }
 
   // ---------- โครงสร้าง ----------
@@ -173,14 +222,14 @@
       </details>`).join("");
 
     $("#levels-legend").innerHTML = D.levels.map((l) =>
-      `<div class="level-item"><span class="badge lv${l.level}">${l.level} · ${esc(l.name)}</span><p>${esc(l.desc)}</p></div>`).join("");
+      `<div class="level-item">${levelBadge(l.level)}<p>${esc(l.desc)}</p></div>`).join("");
   }
 
   // ---------- กระบวนการ ----------
   function renderProcess() {
     $("#process-list").innerHTML = D.pdca.map((p) => `
       <div class="panel step">
-        <div class="step-head"><span class="step-no">${p.step}</span><span class="phase ph-${p.phase}">${p.phase} · ${PHASE_NAME[p.phase]}</span></div>
+        <div class="step-head"><span class="step-no">${p.step}</span><span class="phase ph-${p.phase}">${p.phase} ${PHASE_NAME[p.phase]}</span></div>
         <h3>${esc(p.title)}</h3>
         <ul>${p.tasks.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
         <dl><dt>ผู้รับผิดชอบ</dt><dd>${esc(p.owner)}</dd><dt>ผลผลิต</dt><dd>${esc(p.output)}</dd></dl>
@@ -396,7 +445,7 @@
     $("#sar").innerHTML = `
       <header class="sar-head">
         <h2>รายงานผลการประเมินตนเองของสถานศึกษา (ร่าง)</h2>
-        <p>${esc(D.school.name)} · ปีการศึกษา ${AY}</p>
+        <p>${esc(D.school.name)}<br>ปีการศึกษา ${AY}</p>
       </header>
       <h3>สรุปผลการประเมินรายมาตรฐาน</h3>
       <table><thead><tr><th>มาตรฐาน</th><th>ระดับคุณภาพ</th></tr></thead><tbody>
