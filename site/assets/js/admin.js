@@ -191,6 +191,18 @@
           <button type="button" class="btn" data-act="export">ส่งออก JSON</button>
           <label class="btn file-btn">นำเข้า JSON<input type="file" accept="application/json" data-act="import" hidden></label>
         </div>
+      </div>
+
+      <div class="panel adm-form">
+        <h2>สำรองข้อมูลทั้งหมด</h2>
+        <p class="hint">ดาวน์โหลดไฟล์เดียวที่รวมค่าตั้งค่า (เป้าหมาย กลยุทธ์ มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย) ผลการประเมิน ระดับที่คณะกรรมการตัดสิน จุดเด่น/จุดที่ควรพัฒนา และรายการหลักฐาน ควรสำรองหลังปิดรอบประเมินแต่ละครั้ง (ไฟล์หลักฐานจริงยังอยู่ใน Google Drive ตามลิงก์)</p>
+        <div class="toolbar">
+          <select id="backup-year" aria-label="ปีการศึกษาที่จะสำรอง">
+            <option value="">ทุกปีการศึกษา</option>
+            ${Y.years.map((y) => `<option value="${esc(y.year)}">ปีการศึกษา ${esc(y.year)}</option>`).join("")}
+          </select>
+          <button type="button" class="btn primary" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button>
+        </div>
       </div>`;
   }
 
@@ -384,6 +396,46 @@
     } catch (e) { /* toast แล้ว */ }
   }
 
+  function downloadJson(name, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
+  // ไฟล์สำรอง: ค่าตั้งค่า + ข้อมูลผลการประเมินและหลักฐานของแต่ละปี
+  async function backup(only) {
+    const years = only ? [only] : app().years.years.map((y) => y.year);
+    const out = {
+      format: "pcshscr-iqa-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      exportedBy: (app().store.user && app().store.user.email) || "",
+      source: app().store.mode === "remote" ? "google-sheets" : "browser",
+      activeYear: app().years.active,
+      years: [],
+    };
+    for (const year of years) {
+      const config = await app().loadYearConfig(year);
+      const data = await app().store.load(year);
+      out.years.push({
+        year,
+        config,
+        evidence: data.evidence || [],
+        results: data.results || {},
+        verdicts: data.verdicts || {},
+        notes: data.notes || {},
+      });
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadJson(`iqa-backup-${only || "all"}-${stamp}.json`, out);
+    const n = out.years.reduce((a, y) => a + Object.keys(y.results).length + y.evidence.length, 0);
+    return { years: out.years.length, records: n };
+  }
+
   function moveItem(list, k, d) {
     const j = k + d;
     if (j < 0 || j >= list.length) return;
@@ -514,13 +566,15 @@
         return;
       }
       if (act === "export") {
-        const blob = new Blob([JSON.stringify(st.draft, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `iqa-config-${st.year}.json`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+        downloadJson(`iqa-config-${st.year}.json`, st.draft);
+        return;
+      }
+      if (act === "backup") {
+        el.disabled = true;
+        try {
+          const r = await app().run(() => backup($("#backup-year").value));
+          app().toast(`สำรองข้อมูล ${r.years} ปีการศึกษา (${r.records} รายการ) แล้ว`, "ok");
+        } catch (err) { /* toast แล้ว */ } finally { el.disabled = false; }
         return;
       }
       const listPath = el.dataset.list;
