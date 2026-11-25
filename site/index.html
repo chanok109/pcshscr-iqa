@@ -20,6 +20,7 @@
           <small id="school-name"></small>
         </span>
       </a>
+      <label class="year-switch" id="year-switch" hidden><span class="ys-label">ปีการศึกษา</span><select id="year-select" aria-label="เลือกปีการศึกษา"></select></label>
       <div id="auth-area" class="auth-area"></div>
       <button class="nav-toggle" aria-expanded="false" aria-controls="nav">เมนู</button>
       <nav id="nav" class="nav">
@@ -31,6 +32,7 @@
         <a href="#evidence">คลังหลักฐาน</a>
         <a href="#assessment">ผลการประเมิน</a>
         <a href="#reports">รายงาน</a>
+        <a href="#admin" class="admin-only" hidden>หลังบ้าน</a>
       </nav>
     </div>
   </header>
@@ -110,7 +112,12 @@
     <!-- มาตรฐาน -->
     <section id="page-standards" class="page" hidden>
       <h1>มาตรฐานการศึกษาของสถานศึกษา</h1>
-      <p class="lead">มาตรฐานการศึกษาของสถานศึกษา 4 มาตรฐาน ตามประกาศกระทรวงศึกษาธิการ พ.ศ. 2561 และมาตรฐานความเป็นเลิศทางวิชาการของโรงเรียนวิทยาศาสตร์ พร้อมค่าเป้าหมายและผลการประเมินปีการศึกษา <span class="py"></span> จากรายงาน SAR</p>
+      <p class="lead">เป้าหมาย กลยุทธ์ มาตรฐาน ตัวชี้วัด และค่าเป้าหมาย ปีการศึกษา <span class="ay"></span> พร้อมผลการประเมินปีการศึกษา <span class="py"></span> เป็นค่าอ้างอิง</p>
+      <section class="plan" id="plan" aria-label="เป้าหมายและกลยุทธ์">
+        <div class="panel plan-col"><h2>เป้าหมาย</h2><ol class="plan-list" id="plan-goals"></ol></div>
+        <div class="panel plan-col"><h2>กลยุทธ์</h2><ol class="plan-list" id="plan-strategies"></ol></div>
+      </section>
+      <h2>มาตรฐานและตัวชี้วัด</h2>
       <div id="standards-list"></div>
       <h2>เกณฑ์ระดับคุณภาพ</h2>
       <div class="levels" id="levels-legend"></div>
@@ -189,6 +196,20 @@
       <div id="assessment-list"></div>
     </section>
 
+    <!-- หลังบ้าน -->
+    <section id="page-admin" class="page" hidden>
+      <h1>ระบบหลังบ้าน</h1>
+      <p class="lead">กำหนดปีการศึกษา เป้าหมาย กลยุทธ์ มาตรฐาน ตัวชี้วัด และค่าเป้าหมาย การแก้ไขมีผลกับทุกหน้าของปีการศึกษานั้นทันทีที่บันทึก</p>
+      <div id="admin-app"></div>
+    </section>
+
+    <section id="page-denied" class="page" hidden>
+      <div class="panel login-panel">
+        <h1>ไม่มีสิทธิ์เข้าถึง</h1>
+        <p class="lead">หน้าหลังบ้านใช้ได้เฉพาะผู้ดูแลระบบ ติดต่องานประกันคุณภาพเพื่อขอสิทธิ์</p>
+      </div>
+    </section>
+
     <!-- เข้าสู่ระบบ -->
     <section id="page-login" class="page" hidden>
       <div class="panel login-panel">
@@ -217,7 +238,9 @@
 
   <script src="assets/js/config.js"></script>
   <script src="assets/js/data.js"></script>
+  <script src="assets/js/model.js"></script>
   <script src="assets/js/store.js"></script>
+  <script src="assets/js/admin.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>

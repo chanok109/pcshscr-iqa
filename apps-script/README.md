@@ -7,7 +7,7 @@
 เบราว์เซอร์ (github.io) ──Sign in with Google──▶ ได้ ID token
       │  POST {idToken, action}
       ▼
-Apps Script Web App ──ตรวจ token กับ Google + โดเมน + บทบาท──▶ Google Sheet (Users / Evidence / Results / Assessments / Log)
+Apps Script Web App ──ตรวจ token กับ Google + โดเมน + บทบาท──▶ Google Sheet (Users / Evidence / Results / Assessments / Years / Config / Log)
 ```
 
 ใช้เวลาตั้งค่าประมาณ 20–30 นาที ต้องใช้บัญชี Google ของโรงเรียน ทำ 5 ขั้นตอนตามลำดับ
@@ -22,7 +22,8 @@ Apps Script Web App ──ตรวจ token กับ Google + โดเมน 
 3. ลบโค้ดเดิมในไฟล์ `Code.gs` แล้ววางเนื้อหาจากไฟล์ [`Code.gs`](Code.gs) ทั้งหมด
 4. (แนะนำ) ที่ **การตั้งค่าโปรเจกต์ (⚙)** ติ๊ก "แสดงไฟล์ manifest appsscript.json" แล้ววางเนื้อหาจาก [`appsscript.json`](appsscript.json)
 5. เลือกฟังก์ชัน `setup` ที่แถบด้านบน แล้วกด **เรียกใช้** → อนุญาตสิทธิ์ตามที่ Google ถาม
-   - ระบบจะสร้างชีต `Users`, `Evidence`, `Results`, `Assessments`, `Log`
+   - ระบบจะสร้างชีต `Users`, `Evidence`, `Results`, `Assessments`, `Years`, `Config`, `Log`
+   - `Years` และ `Config` เก็บค่าตั้งค่ารายปีจากหน้า "หลังบ้าน" (อย่าแก้ในชีตโดยตรง ให้แก้ผ่านหน้าหลังบ้าน)
    - และเพิ่มบัญชีของคุณเป็น **admin** ในชีต `Users`
 
 ## ขั้นที่ 2 สร้าง OAuth Client ID (สำหรับปุ่ม Sign in with Google)
@@ -49,7 +50,7 @@ Apps Script Web App ──ตรวจ token กับ Google + โดเมน 
 |---|---|
 | `CLIENT_ID` | Client ID จากขั้นที่ 2 |
 | `ALLOWED_DOMAIN` | `pcccr.ac.th` |
-| `ACADEMIC_YEAR` | `2569` (สร้างให้อัตโนมัติจาก `setup`) |
+| `ACADEMIC_YEAR` | `2569` ปีตั้งต้น ใช้เมื่อคำขอไม่ระบุปี (สร้างให้อัตโนมัติจาก `setup`) |
 | `DEFAULT_ROLE` | `teacher` หรือ `viewer` — บทบาทของบัญชีโรงเรียนที่ไม่มีชื่อในชีต `Users` |
 
 ## ขั้นที่ 4 Deploy เป็น Web App
@@ -82,6 +83,12 @@ window.IQA_CONFIG = {
 ค่าทั้งสองนี้ **ไม่ใช่ความลับ** (เบราว์เซอร์ของผู้ใช้ทุกคนต้องเห็นอยู่แล้ว) จึงเก็บใน repo ได้
 
 ---
+
+## ข้อมูลแยกตามปีการศึกษา
+
+- ผลการประเมินในชีต `Results` และ `Assessments` เก็บเป็นคีย์ `ปี:รหัส` เช่น `2569:1.1.1#0` รหัสหลักฐานขึ้นต้นด้วยปี เช่น `2569-1.1.3-D-001`
+- ค่าตั้งค่ารายปีอ่านได้โดยไม่ต้องล็อกอิน (เป็นข้อมูลเดียวกับที่ประกาศต่อสาธารณะ) แต่บันทึก ตั้งปีปัจจุบัน และลบได้เฉพาะ `admin`
+- ปีการศึกษาแรกที่บันทึกจากหน้าหลังบ้านจะเป็นปีปัจจุบันโดยอัตโนมัติ
 
 ## การจัดการผู้ใช้และสิทธิ์
 

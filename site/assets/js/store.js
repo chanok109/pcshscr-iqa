@@ -1,13 +1,15 @@
 /*
  * ชั้นจัดเก็บข้อมูล: โหมด remote (Google Sheets ผ่าน Apps Script + Sign in with Google)
  * หรือโหมด local (localStorage ของเบราว์เซอร์ — ใช้เมื่อยังไม่ได้ตั้งค่า config.js)
+ *
+ * ข้อมูลผลการประเมินแยกตามปีการศึกษา (store.year)
+ * ค่าตั้งค่าแต่ละปี (เป้าหมาย กลยุทธ์ มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย) จัดการผ่าน listYears / getYearConfig / saveYearConfig
  */
 (function () {
   "use strict";
 
   const C = window.IQA_CONFIG || {};
-  const D = window.IQA_DATA;
-  const AY = D.school.academicYear;
+  const M = window.IQAModel;
   const REMOTE = Boolean(C.apiUrl && C.googleClientId);
   const ROLE_PERMS = {
     admin: ["read", "evidence:add", "evidence:delete:any", "assess", "admin"],
@@ -40,71 +42,112 @@
   // LOCAL
   // =====================================================================
   function localStore() {
-    const K = {
-      evidence: `iqa.${AY}.evidence`, results: `iqa.${AY}.results`,
-      verdicts: `iqa.${AY}.verdicts`, notes: `iqa.${AY}.notes`,
-    };
+    const K = (y) => ({
+      evidence: `iqa.${y}.evidence`, results: `iqa.${y}.results`,
+      verdicts: `iqa.${y}.verdicts`, notes: `iqa.${y}.notes`,
+    });
+    const REG = "iqa.years";
+    const CFG = (y) => `iqa.cfg.${y}`;
     const L = (k, f) => get("localStorage", k, f);
     const W = (k, v) => set("localStorage", k, v);
+    const registry = () => L(REG, null) || { active: M.SEED_YEAR, years: { [M.SEED_YEAR]: { updatedAt: "" } } };
 
-    function nextId(evidence, issue, phase) {
-      const prefix = `${AY}-${issue}-${phase}-`;
+    function nextId(evidence, year, issue, phase) {
+      const prefix = `${year}-${issue}-${phase}-`;
       const max = evidence.filter((e) => e.id.startsWith(prefix))
         .reduce((m, e) => Math.max(m, parseInt(e.id.slice(prefix.length), 10) || 0), 0);
       return prefix + String(max + 1).padStart(3, "0");
     }
 
-    return {
+    const store = {
       mode: "local",
+      year: M.SEED_YEAR,
       user: { name: "โหมดทดลอง", email: "", role: "admin", perms: ROLE_PERMS.admin },
       async init() { return this.user; },
-      async load() {
-        return {
-          evidence: L(K.evidence, []),
-          results: L(K.results, {}),
-          verdicts: L(K.verdicts, {}),
-          notes: L(K.notes, {}),
-        };
+      setYear(y) { store.year = String(y); },
+
+      // ---------- ปีการศึกษาและค่าตั้งค่า ----------
+      async listYears() {
+        const r = registry();
+        return { active: r.active, years: Object.keys(r.years).sort().map((y) => ({ year: y, ...r.years[y] })) };
+      },
+      async getYearConfig(y) {
+        return L(CFG(y), null);
+      },
+      async saveYearConfig(y, cfg) {
+        y = String(y);
+        W(CFG(y), cfg);
+        const r = registry();
+        r.years[y] = { updatedAt: new Date().toISOString(), updatedBy: "" };
+        if (!r.active) r.active = y;
+        W(REG, r);
+        return { year: y };
+      },
+      async setActiveYear(y) {
+        const r = registry();
+        if (!r.years[y]) throw new Error("ไม่พบปีการศึกษา " + y);
+        r.active = String(y);
+        W(REG, r);
+      },
+      async deleteYear(y) {
+        const r = registry();
+        if (r.active === y) throw new Error("ลบปีการศึกษาที่ใช้งานอยู่ไม่ได้");
+        delete r.years[y];
+        W(REG, r);
+        del("localStorage", CFG(y));
+      },
+
+      // ---------- ผลการประเมินของปี store.year (หรือปีที่ระบุ) ----------
+      async load(y = store.year) {
+        const k = K(y);
+        return { evidence: L(k.evidence, []), results: L(k.results, {}), verdicts: L(k.verdicts, {}), notes: L(k.notes, {}) };
       },
       async addEvidence(p) {
-        const list = L(K.evidence, []);
-        const item = { ...p, id: nextId(list, p.issue, p.phase), createdAt: new Date().toISOString(), createdBy: "" };
-        W(K.evidence, [...list, item]);
+        const k = K(store.year);
+        const list = L(k.evidence, []);
+        const item = { ...p, id: nextId(list, store.year, p.issue, p.phase), createdAt: new Date().toISOString(), createdBy: "" };
+        W(k.evidence, [...list, item]);
         return item;
       },
       async deleteEvidence(id) {
-        W(K.evidence, L(K.evidence, []).filter((x) => x.id !== id));
+        const k = K(store.year);
+        W(k.evidence, L(k.evidence, []).filter((x) => x.id !== id));
       },
       async importEvidence(items) {
-        const list = L(K.evidence, []);
+        const k = K(store.year);
+        const list = L(k.evidence, []);
         const ids = new Set(list.map((x) => x.id));
         const added = items.filter((x) => x && x.id && x.title && x.issue && /^[PDCA]$/.test(x.phase) && !ids.has(x.id));
-        W(K.evidence, [...list, ...added]);
+        W(k.evidence, [...list, ...added]);
         return { added: added.length, skipped: items.length - added.length };
       },
       async setResult(key, value) {
-        const r = L(K.results, {});
+        const k = K(store.year);
+        const r = L(k.results, {});
         r[key] = value;
-        W(K.results, r);
+        W(k.results, r);
       },
       async setAssessment(issue, patch) {
+        const k = K(store.year);
         if ("level" in patch) {
-          const v = L(K.verdicts, {});
+          const v = L(k.verdicts, {});
           if (patch.level) v[issue] = patch.level; else delete v[issue];
-          W(K.verdicts, v);
+          W(k.verdicts, v);
         }
-        const n = L(K.notes, {});
+        const n = L(k.notes, {});
         n[issue] = { ...(n[issue] || {}) };
         if ("strengths" in patch) n[issue].strengths = patch.strengths;
         if ("improve" in patch) n[issue].improve = patch.improve;
-        W(K.notes, n);
+        W(k.notes, n);
       },
       async clearResults() {
-        del("localStorage", K.results);
-        del("localStorage", K.verdicts);
+        const k = K(store.year);
+        del("localStorage", k.results);
+        del("localStorage", k.verdicts);
       },
       can(perm) { return this.user.perms.includes(perm); },
     };
+    return store;
   }
 
   // =====================================================================
@@ -130,31 +173,37 @@
       return p && p.exp * 1000 > Date.now() + 60000 ? t : null;
     }
 
-    async function api(action, payload) {
-      const idToken = savedToken();
-      if (!idToken) {
-        store.signOut(false);
-        throw Object.assign(new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"), { code: 401 });
-      }
+    async function call(body) {
       let res;
       try {
         // ส่งเป็น text/plain เพื่อไม่ให้เบราว์เซอร์ทำ CORS preflight (Apps Script ไม่รองรับ OPTIONS)
         res = await fetch(C.apiUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ idToken, action, payload }),
+          body: JSON.stringify(body),
         });
       } catch (e) {
         throw new Error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตหรือ apiUrl");
       }
-      let body;
-      try { body = await res.json(); } catch (e) { throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ตรวจการ deploy Apps Script)"); }
-      if (!body.ok) {
-        if (body.code === 401) store.signOut(false);
-        throw Object.assign(new Error(body.error || "เกิดข้อผิดพลาด"), { code: body.code });
+      let out;
+      try { out = await res.json(); } catch (e) { throw new Error("เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ตรวจการ deploy Apps Script)"); }
+      if (!out.ok) {
+        if (out.code === 401 && body.idToken) store.signOut(false);
+        throw Object.assign(new Error(out.error || "เกิดข้อผิดพลาด"), { code: out.code });
       }
-      return body.data;
+      return out.data;
     }
+
+    async function api(action, payload) {
+      const idToken = savedToken();
+      if (!idToken) {
+        store.signOut(false);
+        throw Object.assign(new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่"), { code: 401 });
+      }
+      return call({ idToken, action, payload });
+    }
+    // ข้อมูลมาตรฐาน/ค่าเป้าหมายเป็นข้อมูลสาธารณะ อ่านได้โดยไม่ต้องล็อกอิน
+    const publicApi = (action, payload) => call({ action, payload });
 
     function loadGis() {
       if (window.google && google.accounts && google.accounts.id) return Promise.resolve();
@@ -172,8 +221,10 @@
 
     const store = {
       mode: "remote",
+      year: M.SEED_YEAR,
       user: null,
       onAuthChange(fn) { listeners.push(fn); },
+      setYear(y) { store.year = String(y); },
 
       async init() {
         await loadGis();
@@ -221,13 +272,19 @@
 
       onError(e) { console.error(e); },
 
-      load: () => api("load"),
-      addEvidence: (p) => api("addEvidence", p),
+      listYears: () => publicApi("listYears"),
+      getYearConfig: (year) => publicApi("getYearConfig", { year }),
+      saveYearConfig: (year, config) => api("saveYearConfig", { year, config }),
+      setActiveYear: (year) => api("setActiveYear", { year }),
+      deleteYear: (year) => api("deleteYear", { year }),
+
+      load: (year = store.year) => api("load", { year }),
+      addEvidence: (p) => api("addEvidence", { ...p, year: store.year }),
       deleteEvidence: (id) => api("deleteEvidence", { id }),
       importEvidence: (items) => api("importEvidence", { items }),
-      setResult: (key, value) => api("setResult", { key, value }),
-      setAssessment: (issue, patch) => api("setAssessment", { issue, ...patch }),
-      clearResults: () => api("clearResults"),
+      setResult: (key, value) => api("setResult", { year: store.year, key, value }),
+      setAssessment: (issue, patch) => api("setAssessment", { year: store.year, issue, ...patch }),
+      clearResults: () => api("clearResults", { year: store.year }),
       can(perm) { return Boolean(store.user && store.user.perms && store.user.perms.includes(perm)); },
     };
     return store;
