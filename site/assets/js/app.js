@@ -693,7 +693,7 @@
 
   function renderYearSelect() {
     const sel = $("#year-select");
-    sel.innerHTML = YEARS.years.map((y) => `<option value="${esc(y.year)}" ${y.year === AY ? "selected" : ""}>ปีการศึกษา ${esc(y.year)}${y.year === YEARS.active ? " (ปัจจุบัน)" : ""}</option>`).join("");
+    sel.innerHTML = YEARS.years.map((y) => `<option value="${esc(y.year)}" ${y.year === AY ? "selected" : ""}>${esc(y.year)}${y.year === YEARS.active ? " (ปัจจุบัน)" : ""}</option>`).join("");
     $("#year-switch").hidden = YEARS.years.length < 2;
   }
 

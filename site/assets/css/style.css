@@ -123,7 +123,21 @@ code { font-size: .9em; background: var(--surface-2); padding: .05em .35em; bord
   .nav a::after { display: none; }
   .nav a.active { color: var(--gold); }
 }
-@media (max-width: 560px) { .brand-text small { display: none; } .topbar-inner { gap: .75rem; } }
+@media (max-width: 560px) {
+  .brand-text small { display: none; }
+  .topbar-inner { gap: .6rem; }
+  .brand { flex-shrink: 1; }
+  .brand-text strong { overflow: hidden; text-overflow: ellipsis; }
+  .year-switch select { max-width: 170px; }
+}
+@media (max-width: 480px) {
+  /* บนมือถือเมื่อมีตัวเลือกปี ให้เหลือเฉพาะโลโก้ */
+  .topbar-inner:has(.year-switch:not([hidden])) .brand-text { display: none; }
+  .ys-label { display: none; }
+  .topbar-inner:has(.year-switch:not([hidden])) .brand { min-width: 40px; flex-shrink: 0; }
+  .year-switch { flex: 0 1 180px; min-width: 0; }
+  .year-switch select { width: 100%; max-width: none; text-overflow: ellipsis; }
+}
 
 .user-chip { display: flex; align-items: center; gap: .6rem; font-size: .82rem; line-height: 1.25; }
 .user-chip img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--gold-soft); }
@@ -492,7 +506,7 @@ details.std .hint { margin: .75rem 1.5rem 1.25rem; }
 .as-ind-input small { color: var(--muted); }
 
 /* year switcher (header) */
-.year-switch { order: 2; flex-direction: row; align-items: center; gap: 0; font-size: 0; white-space: nowrap; }
+.year-switch { order: 2; flex-direction: row; align-items: center; gap: .45rem; font-size: .82rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
 .year-switch select { width: auto; padding: .25rem .5rem; border-radius: 999px; font-size: .85rem; font-weight: 500; }
 
 
@@ -621,3 +635,6 @@ details.std .hint { margin: .75rem 1.5rem 1.25rem; }
   .sar-std { break-inside: avoid-page; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ป้าย "ปีการศึกษา" ข้างตัวเลือกปี: ซ่อนในช่วงจอที่เมนูเต็มแถวกินพื้นที่ */
+@media (min-width: 1341px) and (max-width: 1520px) { .ys-label { display: none; } }
