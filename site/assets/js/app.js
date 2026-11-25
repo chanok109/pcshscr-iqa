@@ -1,9 +1,18 @@
 (function () {
   "use strict";
 
-  const D = window.IQA_DATA;
+  const BASE = window.IQA_DATA;
+  const M = window.IQAModel;
   const store = window.IQAStore;
-  const AY = D.school.academicYear;
+  // ค่าตั้งค่าของปีการศึกษาที่กำลังแสดง (โหลดจาก store หรือค่าตั้งต้นใน data.js)
+  let D = BASE;
+  let CFG = null;
+  let AY = BASE.school.academicYear;
+  let PY = BASE.school.previousYear;
+  let YEARS = { active: AY, years: [{ year: AY }] };
+  let issues = [];
+  let issueByCode = {};
+  let stdOf = {};
   const PHASE_NAME = { P: "วางแผน", D: "ดำเนินการ", C: "ประเมิน", A: "ปรับปรุง" };
   const GATED = new Set(["evidence", "assessment", "reports"]);
 
@@ -15,9 +24,20 @@
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const levelInfo = (n) => D.levels.find((l) => l.level === n);
-  const issues = D.standards.flatMap((s) => s.issues.map((i) => ({ ...i, std: s })));
-  const issueByCode = Object.fromEntries(issues.map((i) => [i.code, i]));
-  const indKey = (issue, idx) => `${issue.code}#${idx}`;
+  // คีย์ผลการประเมิน: รหัสประเด็น + id ของตัวชี้วัด/รายการ (rubric ใช้ id "0")
+  const indKey = (issue, item) => `${issue.code}#${item.id}`;
+  const RUBRIC = { id: "0" };
+
+  function setModel(cfg) {
+    CFG = cfg;
+    D = { ...BASE, goals: cfg.goals, strategies: cfg.strategies, standards: cfg.standards,
+      school: { ...BASE.school, academicYear: cfg.academicYear, previousYear: cfg.previousYear } };
+    AY = cfg.academicYear;
+    PY = cfg.previousYear || String(Number(AY) - 1);
+    issues = D.standards.flatMap((s) => s.issues.map((i) => ({ ...i, std: s })));
+    issueByCode = Object.fromEntries(issues.map((i) => [i.code, i]));
+    stdOf = Object.fromEntries(issues.map((i) => [i.code, i.std]));
+  }
   const signedIn = () => Boolean(store.user);
   const can = (perm) => store.can(perm);
 
@@ -58,8 +78,6 @@
   }
 
   // ---------- ระดับคุณภาพ (ตามประกาศค่าเป้าหมายของโรงเรียน) ----------
-  const PY = D.school.previousYear;
-  const stdOf = Object.fromEntries(issues.map((i) => [i.code, i.std]));
   const has = (v) => v !== "" && v != null && !isNaN(v);
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const band = (bands, value) => (value == null ? null : (bands.find((b) => value >= b.min) || bands[bands.length - 1]).level);
@@ -78,25 +96,25 @@
   function issueScore(issue, results = S.results) {
     const std = stdOf[issue.code];
     if (issue.checklist) {
-      const vals = issue.checklist.map((_, k) => results[indKey(issue, k)]);
+      const vals = issue.checklist.map((it) => results[indKey(issue, it)]);
       if (!vals.some(has)) return { value: null, level: null };
       const count = vals.filter((v) => Number(v) === 1).length;
       return { value: count, label: `${count}/${issue.checklist.length} ข้อ`, level: Math.max(1, count) };
     }
     if (issue.rubric) {
-      const v = results[indKey(issue, 0)];
+      const v = results[indKey(issue, RUBRIC)];
       return has(v) ? { value: Number(v), label: `ระดับ ${v}`, level: Number(v) } : { value: null, level: null };
     }
     if (std.method === "achievement") {
-      const value = mean(issue.indicators.map((ind, k) => achievement(ind, results[indKey(issue, k)])).filter((x) => x != null));
+      const value = mean(issue.indicators.map((ind) => achievement(ind, results[indKey(issue, ind)])).filter((x) => x != null));
       return { value, label: value == null ? "" : `สำเร็จ ${fmt(value)}%`, level: band(std.bands, value) };
     }
-    const value = mean(issue.indicators.map((_, k) => results[indKey(issue, k)]).filter(has).map(Number));
+    const value = mean(issue.indicators.map((ind) => results[indKey(issue, ind)]).filter(has).map(Number));
     return { value, label: value == null ? "" : `ร้อยละ ${fmt(value)}`, level: band(std.bands, value) };
   }
   const issueSuggested = (issue) => issueScore(issue).level;
-  function issueLevel(issue) {
-    const v = S.verdicts[issue.code];
+  function issueLevel(issue, verdicts = S.verdicts) {
+    const v = verdicts[issue.code];
     return v ? Number(v) : issueSuggested(issue);
   }
   // ผลรายมาตรฐาน: { label, level }
@@ -157,6 +175,7 @@
     $("#evidence-form").hidden = !can("evidence:add");
     $("#ev-import-label").hidden = !(store.mode === "local" || can("admin"));
     $("#as-clear").hidden = !can("admin");
+    $$(".admin-only").forEach((el) => { el.hidden = !can("admin"); });
     $$(".local-only").forEach((el) => { el.hidden = store.mode !== "local"; });
     $$(".remote-only").forEach((el) => { el.hidden = store.mode !== "remote"; });
   }
@@ -308,7 +327,7 @@
     const rows = (s, i) => {
       if (i.checklist) {
         return i.checklist.map((t, k) => `<tr>${k === 0 ? `<td rowspan="${i.checklist.length}" class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>` : ""}
-          <td>${i.code}.${k + 1} ${esc(t)}</td>${k === 0 ? `<td rowspan="${i.checklist.length}" class="num">ยอดเยี่ยม<br><small class="hint">ครบ 5 ข้อ</small></td><td rowspan="${i.checklist.length}" class="num">${i.prevLevel ? esc(levelInfo(i.prevLevel).name) : "—"}</td>` : ""}</tr>`).join("");
+          <td>${i.code}.${k + 1} ${esc(t.text)}</td>${k === 0 ? `<td rowspan="${i.checklist.length}" class="num">ยอดเยี่ยม<br><small class="hint">ครบ 5 ข้อ</small></td><td rowspan="${i.checklist.length}" class="num">${i.prevLevel ? esc(levelInfo(i.prevLevel).name) : "—"}</td>` : ""}</tr>`).join("");
       }
       if (i.rubric) {
         return `<tr><td class="issue-cell"><span class="code">${i.code}</span> ${esc(i.name)}</td>
@@ -339,12 +358,31 @@
           <div class="review-grid">${list("จุดเด่น", s.review.strengths)}${list("จุดที่ควรพัฒนา", s.review.improve)}${list("ข้อเสนอแนะ", s.review.suggest)}</div></div>` : ""}
       </details>`).join("");
 
-    $("#levels-legend").innerHTML = `
-      <div class="level-item">${levelBadge(5)}<p>มาตรฐานที่ 1, 3: ร้อยละ 90 ขึ้นไป<br>มาตรฐานที่ 2: 5 ข้อ / คะแนนรวม 25–40<br>มาตรฐานที่ 4: สำเร็จร้อยละ 90 ขึ้นไป</p></div>
-      <div class="level-item">${levelBadge(4)}<p>ร้อยละ 80–89.99<br>4 ข้อ / คะแนนรวม 20–24<br>สำเร็จร้อยละ 80–89.99</p></div>
-      <div class="level-item">${levelBadge(3)}<p>ร้อยละ 70–79.99<br>3 ข้อ / คะแนนรวม 14–19<br>สำเร็จร้อยละ 70–79.99</p></div>
-      <div class="level-item">${levelBadge(2)}<p>ร้อยละ 60–69.99<br>2 ข้อ / คะแนนรวม 8–13<br>สำเร็จร้อยละ 60–69.99</p></div>
-      <div class="level-item">${levelBadge(1)}<p>ต่ำกว่าร้อยละ 60<br>1 ข้อ / คะแนนรวม 0–7<br>สำเร็จต่ำกว่าร้อยละ 60</p></div>`;
+    // เกณฑ์ระดับคุณภาพ สร้างจากค่าเกณฑ์ของแต่ละมาตรฐานในปีที่แสดง
+    const legendLine = (s, lv) => {
+      const bands = (s.method === "checklist" ? s.scoreBands : s.bands) || [];
+      const b = bands.find((x) => x.level === lv);
+      if (!b) return "";
+      const what = s.method === "checklist" ? `คะแนนรวม ${fmt(b.min)} ขึ้นไป` : s.method === "achievement" ? `สำเร็จร้อยละ ${fmt(b.min)} ขึ้นไป` : `ร้อยละ ${fmt(b.min)} ขึ้นไป`;
+      return `มาตรฐานที่ ${esc(s.code)}: ${what}`;
+    };
+    $("#levels-legend").innerHTML = [5, 4, 3, 2, 1].map((lv) =>
+      `<div class="level-item">${levelBadge(lv)}<p>${D.standards.map((s) => legendLine(s, lv)).filter(Boolean).join("<br>") || "—"}</p></div>`).join("");
+
+    renderPlan();
+  }
+
+  // เป้าหมายและกลยุทธ์ของปีการศึกษา
+  function renderPlan() {
+    const goals = D.goals || [];
+    const strategies = D.strategies || [];
+    const goalCode = Object.fromEntries(goals.map((g) => [g.id, g.code]));
+    $("#plan").hidden = !goals.length && !strategies.length;
+    $("#plan-goals").innerHTML = goals.map((g) => `<li><span class="plan-no">${esc(g.code)}</span><span>${esc(g.text)}</span></li>`).join("")
+      || `<li class="hint">ยังไม่ได้กำหนดเป้าหมาย</li>`;
+    $("#plan-strategies").innerHTML = strategies.map((st) => `<li><span class="plan-no">${esc(st.code)}</span><span>${esc(st.name)}
+        ${st.goals.length || st.standards.length ? `<span class="plan-links">${st.standards.map((c) => `<span class="chip">มาตรฐานที่ ${esc(c)}</span>`).join("")}${st.goals.map((id) => goalCode[id] ? `<span class="chip">เป้าหมาย ${esc(goalCode[id])}</span>` : "").join("")}</span>` : ""}</span></li>`).join("")
+      || `<li class="hint">ยังไม่ได้กำหนดกลยุทธ์</li>`;
   }
 
   // ---------- กระบวนการ ----------
@@ -365,12 +403,14 @@
   }
 
   // ---------- คลังหลักฐาน ----------
+  function fillEvidenceOptions() {
+    $("#evidence-form select[name=issue]").innerHTML = D.standards.map((s) =>
+      `<optgroup label="มาตรฐานที่ ${esc(s.code)} ${esc(s.name)}">${s.issues.map((i) =>
+        `<option value="${esc(i.code)}">${esc(i.code)} ${esc(i.name)}</option>`).join("")}</optgroup>`).join("");
+    $("#ev-filter-std").innerHTML = `<option value="">ทุกมาตรฐาน</option>` + D.standards.map((s) => `<option value="${esc(s.code)}">มาตรฐานที่ ${esc(s.code)}</option>`).join("");
+  }
+
   function initEvidence() {
-    const sel = $("#evidence-form select[name=issue]");
-    sel.innerHTML = D.standards.map((s) =>
-      `<optgroup label="มาตรฐานที่ ${s.code} ${esc(s.name)}">${s.issues.map((i) =>
-        `<option value="${i.code}">${i.code} ${esc(i.name)}</option>`).join("")}</optgroup>`).join("");
-    $("#ev-filter-std").innerHTML += D.standards.map((s) => `<option value="${s.code}">มาตรฐานที่ ${s.code}</option>`).join("");
 
     $("#evidence-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -481,26 +521,26 @@
     const body = (s, i) => {
       if (i.checklist) {
         return `<ul class="checklist">${i.checklist.map((t, k) => {
-          const key = indKey(i, k);
-          return `<li><label class="check"><input type="checkbox" data-result="${key}" ${Number(S.results[key]) === 1 ? "checked" : ""} ${dis}>
-            <span><span class="code">${i.code}.${k + 1}</span> ${esc(t)}</span></label></li>`;
+          const key = indKey(i, t);
+          return `<li><label class="check"><input type="checkbox" data-result="${esc(key)}" ${Number(S.results[key]) === 1 ? "checked" : ""} ${dis}>
+            <span><span class="code">${i.code}.${k + 1}</span> ${esc(t.text)}</span></label></li>`;
         }).join("")}</ul>`;
       }
       if (i.rubric) {
-        const key = indKey(i, 0);
+        const key = indKey(i, RUBRIC);
         return `<ul class="checklist rubric">${i.rubric.map((t, k) => ({ t, lv: k + 1 })).reverse().map(({ t, lv }) =>
           `<li><label class="check"><input type="radio" name="rb-${i.code}" data-result="${key}" value="${lv}" ${String(S.results[key]) === String(lv) ? "checked" : ""} ${dis}>
             <span>${levelBadge(lv)} ${esc(t)}</span></label></li>`).join("")}</ul>`;
       }
-      return i.indicators.map((ind, k) => {
-        const key = indKey(i, k);
+      return i.indicators.map((ind) => {
+        const key = indKey(i, ind);
         const v = S.results[key] ?? "";
         const ok = metTarget(ind, v);
         const pct = !has(v) ? 0 : ind.dir === "min" ? Math.min(120, achievement(ind, v)) : Math.min(120, (Number(v) / ind.target) * 100);
         return `<div class="as-ind">
           <span class="as-ind-name">${esc(ind.name)}</span>
           <span class="as-ind-target">เป้าหมาย <b>${fmtTarget(ind)}</b><small>ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)}</small></span>
-          <label class="as-ind-input">ผล <input type="number" step="any" min="0" data-result="${key}" value="${esc(v)}" ${dis}>${ind.unit && ind.unit !== "%" ? `<small>${esc(ind.unit)}</small>` : ""}</label>
+          <label class="as-ind-input">ผล <input type="number" step="any" min="0" data-result="${esc(key)}" value="${esc(v)}" ${dis}>${ind.unit && ind.unit !== "%" ? `<small>${esc(ind.unit)}</small>` : ""}</label>
           <span class="bar ${ok === false ? "miss" : ""}" aria-hidden="true"><i class="${ok == null ? "" : ok ? "lv5" : "lv1"}" style="width:${pct / 1.2}%"></i><em></em></span>
           <span class="status ${ok == null ? "" : ok ? "ok" : "miss"}">${ok == null ? "" : ok ? "บรรลุเป้าหมาย" : "ต่ำกว่าเป้าหมาย"}</span>
         </div>`;
@@ -600,10 +640,10 @@
             const evs = S.evidence.filter((e) => e.issue === i.code);
             return `<div class="sar-issue">
               <h4>${i.code} ${esc(i.name)} ${levelBadge(issueLevel(i))}</h4>
-              <ul>${i.checklist ? i.checklist.map((t, k) => `<li>${Number(S.results[indKey(i, k)]) === 1 ? "✓" : "–"} ${esc(t)}</li>`).join("")
-                : i.rubric ? `<li>${has(S.results[indKey(i, 0)]) ? esc(i.rubric[Number(S.results[indKey(i, 0)]) - 1]) : "ยังไม่ประเมิน"}</li>`
-                : i.indicators.map((ind, idx) => {
-                const v = S.results[indKey(i, idx)];
+              <ul>${i.checklist ? i.checklist.map((t) => `<li>${Number(S.results[indKey(i, t)]) === 1 ? "✓" : "–"} ${esc(t.text)}</li>`).join("")
+                : i.rubric ? `<li>${has(S.results[indKey(i, RUBRIC)]) ? esc(i.rubric[Number(S.results[indKey(i, RUBRIC)]) - 1]) : "ยังไม่ประเมิน"}</li>`
+                : i.indicators.map((ind) => {
+                const v = S.results[indKey(i, ind)];
                 return `<li>${esc(ind.name)}: ผล ${fmtInd(ind, v)} / เป้าหมาย ${fmtTarget(ind)} <span class="hint">(ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)})</span></li>`;
               }).join("")}</ul>
               ${n.strengths ? `<p><b>จุดเด่น:</b> ${esc(n.strengths)}</p>` : ""}
@@ -618,17 +658,19 @@
   const RENDER = {
     home: renderHome, school: renderSchool, structure: renderStructure, standards: renderStandards, process: renderProcess,
     evidence: renderEvidence, assessment: renderAssessment, reports: renderSar,
+    admin: () => window.IQAAdmin && window.IQAAdmin.render(),
   };
 
   function route(scroll = true) {
     const name = (location.hash || "#home").slice(1);
     const page = RENDER[name] ? name : "home";
-    const locked = GATED.has(page) && store.mode === "remote" && !signedIn();
-    $$(".page").forEach((p) => { p.hidden = p.id !== (locked ? "page-login" : "page-" + page); });
+    const locked = (GATED.has(page) || page === "admin") && store.mode === "remote" && !signedIn();
+    const denied = !locked && page === "admin" && !can("admin");
+    $$(".page").forEach((p) => { p.hidden = p.id !== (locked ? "page-login" : denied ? "page-denied" : "page-" + page); });
     $$(".nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + page));
     if (locked) {
       store.renderButton($("#gsi-page"));
-    } else {
+    } else if (!denied) {
       RENDER[page]();
     }
     $("#nav").classList.remove("open");
@@ -636,12 +678,86 @@
     if (scroll) window.scrollTo(0, 0);
   }
 
+  // ---------- ปีการศึกษา ----------
+  async function refreshYears() {
+    try {
+      const y = await store.listYears();
+      YEARS = y && y.years && y.years.length ? y : { active: M.SEED_YEAR, years: [{ year: M.SEED_YEAR }] };
+      if (!YEARS.active) YEARS.active = YEARS.years[YEARS.years.length - 1].year;
+    } catch (e) {
+      toast("โหลดรายการปีการศึกษาไม่สำเร็จ: " + e.message, "error");
+    }
+    renderYearSelect();
+    return YEARS;
+  }
+
+  function renderYearSelect() {
+    const sel = $("#year-select");
+    sel.innerHTML = YEARS.years.map((y) => `<option value="${esc(y.year)}" ${y.year === AY ? "selected" : ""}>ปีการศึกษา ${esc(y.year)}${y.year === YEARS.active ? " (ปัจจุบัน)" : ""}</option>`).join("");
+    $("#year-switch").hidden = YEARS.years.length < 2;
+  }
+
+  // ค่าตั้งค่าของปี: ที่บันทึกไว้ หรือค่าตั้งต้นจาก data.js (เฉพาะปีตั้งต้น)
+  async function loadYearConfig(year) {
+    const stored = await store.getYearConfig(year);
+    if (stored) return M.normalizeYear(stored);
+    if (String(year) === String(M.SEED_YEAR)) return M.seedYear();
+    return null;
+  }
+
+  async function showYear(year, { reloadData = true } = {}) {
+    let cfg = null;
+    try { cfg = await loadYearConfig(year); } catch (e) { toast("โหลดค่าตั้งค่าปี " + year + " ไม่สำเร็จ: " + e.message, "error"); }
+    if (!cfg) cfg = M.normalizeYear({ academicYear: String(year), previousYear: String(Number(year) - 1) });
+    setModel(cfg);
+    store.setYear(AY);
+    $$(".ay").forEach((el) => { el.textContent = AY; });
+    $$(".py").forEach((el) => { el.textContent = PY; });
+    fillEvidenceOptions();
+    renderYearSelect();
+    if (reloadData) await reload();
+  }
+
+  // คำนวณระดับด้วยค่าตั้งค่าและผลชุดอื่นชั่วคราว (ใช้ตอนสร้างปีใหม่จากผลของปีก่อน)
+  function scoreWith(cfg, data) {
+    const saved = { CFG };
+    const savedS = { ...S };
+    setModel(cfg);
+    Object.assign(S, { results: data.results || {}, verdicts: data.verdicts || {} });
+    try {
+      const out = { issues: {}, standards: {} };
+      D.standards.forEach((s) => {
+        s.issues.forEach((i) => { out.issues[i.code] = issueLevel(i); });
+        out.standards[s.code] = standardLevel(s);
+      });
+      return out;
+    } finally {
+      setModel(saved.CFG);
+      Object.assign(S, savedS);
+    }
+  }
+
+  // ให้หน้าหลังบ้านเรียกใช้
+  window.IQAApp = {
+    store, esc, toast, run, levelBadge, fmt, scoreWith,
+    get cfg() { return CFG; },
+    get years() { return YEARS; },
+    get year() { return AY; },
+    levels: () => D.levels,
+    loadYearConfig, refreshYears, showYear,
+    rerender: () => route(false),
+  };
+
   // ---------- init ----------
   async function start() {
     $("#school-name").textContent = D.school.name;
     $$(".school-name").forEach((el) => { el.textContent = D.school.name; });
-    $$(".ay").forEach((el) => { el.textContent = AY; });
-    $$(".py").forEach((el) => { el.textContent = PY; });
+    setModel(M.seedYear());
+    fillEvidenceOptions();
+    $("#year-select").addEventListener("change", async (e) => {
+      await showYear(e.target.value);
+      route(false);
+    });
     $$(".domain").forEach((el) => { el.textContent = (window.IQA_CONFIG || {}).allowedDomain || ""; });
     $(".nav-toggle").addEventListener("click", (e) => {
       const open = $("#nav").classList.toggle("open");
@@ -664,6 +780,8 @@
     }
 
     applyPermissions();
+    await refreshYears();
+    await showYear(YEARS.active, { reloadData: false });
     route();
     try {
       await store.init();
