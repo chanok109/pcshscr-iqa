@@ -291,6 +291,18 @@ tbody th { font-weight: 600; }
   .stat:last-child { border-bottom: 0; }
 }
 
+/* documents (home) */
+.docs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.doc-group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 1.1rem 1.25rem; }
+.doc-group h3 { margin: 0 0 .6rem; font-size: 1rem; display: flex; align-items: baseline; gap: .5rem; }
+.doc-group h3 small { font-family: var(--sans); font-weight: 400; color: var(--muted); font-size: .8rem; }
+.doc-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.doc-group li { display: grid; gap: .1rem; padding-left: 1.1rem; position: relative; }
+.doc-group li::before { content: ""; position: absolute; left: 0; top: .62em; width: .45rem; height: .45rem; border-radius: 2px; background: var(--gold); }
+.doc-group a { font-weight: 500; text-decoration: none; }
+.doc-group a:hover { text-decoration: underline; }
+.doc-group li small { color: var(--muted); font-size: .82rem; }
+
 /* the six IQA steps as a real sequence */
 .section-title { margin-top: 3.5rem; }
 .sequence { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(6, 1fr); position: relative; }
@@ -632,6 +644,14 @@ details[open] > summary .chev { transform: rotate(225deg); margin-bottom: -.2rem
 .pill:has(input:checked) { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, var(--surface)); color: var(--ink-2); }
 @media (prefers-color-scheme: dark) { .pill:has(input:checked) { color: var(--text); border-color: var(--gold); } }
 .pill input { width: auto; accent-color: var(--ink); }
+
+/* documents (admin) */
+.doc-edit { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.doc-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: end; padding: .9rem 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.field-grid.doc-grid { grid-template-columns: minmax(0, 2fr) minmax(8rem, 1fr) minmax(0, 2fr) minmax(0, 1.3fr); }
+.doc-tools { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; min-width: 12.5rem; }
+@media (max-width: 1080px) { .field-grid.doc-grid { grid-template-columns: minmax(0, 2fr) minmax(8rem, 1fr); } }
+@media (max-width: 760px) { .doc-item { grid-template-columns: 1fr; } .field-grid.doc-grid { grid-template-columns: 1fr; } .doc-tools { min-width: 0; } }
 
 /* standards master-detail */
 .std-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 1.25rem; align-items: start; }

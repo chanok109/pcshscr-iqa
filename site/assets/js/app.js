@@ -30,7 +30,7 @@
 
   function setModel(cfg) {
     CFG = cfg;
-    D = { ...BASE, goals: cfg.goals, strategies: cfg.strategies, standards: cfg.standards,
+    D = { ...BASE, goals: cfg.goals, strategies: cfg.strategies, standards: cfg.standards, documents: cfg.documents || [],
       school: { ...BASE.school, academicYear: cfg.academicYear, previousYear: cfg.previousYear } };
     AY = cfg.academicYear;
     PY = cfg.previousYear || String(Number(AY) - 1);
@@ -266,8 +266,27 @@
     ].map(([v, k]) => `<div class="stat"><strong>${v}</strong><span>${k}</span></div>`).join("");
     $("#home-locked").hidden = !locked;
 
+    renderDocuments();
+
     $("#home-steps").innerHTML = D.pdca.map((p) =>
       `<li><span class="seq-no">${p.step}</span><span class="phase ph-${p.phase}">${p.phase}</span><span class="seq-title">${esc(p.title)}</span></li>`).join("");
+  }
+
+  // เอกสารดาวน์โหลด (กำหนดในหลังบ้าน) จัดกลุ่มตามหมวด
+  function renderDocuments() {
+    const docs = (D.documents || []).filter((d) => d.title && /^https:\/\//i.test(d.url || ""));
+    $("#home-docs").hidden = !docs.length;
+    const groups = [];
+    docs.forEach((d) => {
+      const cat = d.category || "เอกสารอื่น ๆ";
+      let g = groups.find((x) => x.cat === cat);
+      if (!g) groups.push((g = { cat, items: [] }));
+      g.items.push(d);
+    });
+    $("#docs-list").innerHTML = groups.map((g) => `
+      <section class="doc-group"><h3>${esc(g.cat)} <small>${g.items.length}</small></h3>
+        <ul>${g.items.map((d) => `<li><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>${d.note ? `<small>${esc(d.note)}</small>` : ""}</li>`).join("")}</ul>
+      </section>`).join("");
   }
 
   // ---------- ข้อมูลโรงเรียน ----------
@@ -737,9 +756,67 @@
     }
   }
 
+  // ข้อมูลรายงานทั้งปี (ใช้สร้างไฟล์ Excel และ Word) จากค่าตั้งค่าและผลของปีนั้น
+  function reportModel(cfg, data) {
+    const savedCFG = CFG;
+    const savedS = { ...S };
+    setModel(cfg);
+    Object.assign(S, { results: data.results || {}, verdicts: data.verdicts || {}, notes: data.notes || {}, evidence: data.evidence || [] });
+    const lvName = (n) => (n ? levelInfo(Number(n)).name : "");
+    try {
+      return {
+        year: AY, previousYear: PY, school: D.school.name,
+        goals: D.goals || [], strategies: D.strategies || [], evidence: S.evidence,
+        standards: D.standards.map((s) => {
+          const ss = standardScore(s);
+          return {
+            code: s.code, name: s.name, targetText: s.targetText || "", label: ss.label || "", level: ss.level, levelName: lvName(ss.level),
+            prevLevelName: s.prev && s.prev.level ? lvName(s.prev.level) : "",
+            issues: s.issues.map((i) => {
+              const sc = issueScore(i);
+              const lv = issueLevel(i);
+              const n = S.notes[i.code] || {};
+              let items;
+              if (i.checklist) {
+                items = i.checklist.map((t, k) => {
+                  const v = S.results[indKey(i, t)];
+                  return { no: `${i.code}.${k + 1}`, name: t.text, resultText: Number(v) === 1 ? "ปฏิบัติได้" : has(v) ? "ไม่ได้ปฏิบัติ" : "", result: has(v) ? Number(v) : "" };
+                });
+              } else if (i.rubric) {
+                const v = S.results[indKey(i, RUBRIC)];
+                items = [{ no: i.code, name: has(v) ? i.rubric[Number(v) - 1] : "ยังไม่ได้เลือกระดับ", resultText: has(v) ? `ระดับ ${v} ${lvName(v)}` : "", result: has(v) ? Number(v) : "" }];
+              } else {
+                items = i.indicators.map((ind, k) => {
+                  const v = S.results[indKey(i, ind)];
+                  const ok = metTarget(ind, v);
+                  return {
+                    no: String(k + 1), name: ind.name, unit: ind.unit || "%", dir: ind.dir === "min" ? "ไม่เกิน" : "ไม่น้อยกว่า",
+                    target: ind.target, targetText: fmtTarget(ind), result: has(v) ? Number(v) : "", resultText: has(v) ? fmtInd(ind, v) : "",
+                    prev: ind.prev == null ? "" : ind.prev, prevText: ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev),
+                    met: ok == null ? "" : ok ? "บรรลุ" : "ไม่บรรลุ",
+                  };
+                });
+              }
+              return {
+                code: i.code, name: i.name, kind: i.checklist ? "checklist" : i.rubric ? "rubric" : "indicators", label: sc.label || "",
+                computedLevelName: lvName(sc.level), committeeLevelName: lvName(S.verdicts[i.code]), level: lv, levelName: lvName(lv),
+                prevLevelName: lvName(i.prevLevel), strengths: n.strengths || "", improve: n.improve || "",
+                evidence: S.evidence.filter((e) => e.issue === i.code).map((e) => e.id), items,
+              };
+            }),
+          };
+        }),
+      };
+    } finally {
+      setModel(savedCFG);
+      Object.assign(S, savedS);
+    }
+  }
+
   // ให้หน้าหลังบ้านเรียกใช้
   window.IQAApp = {
-    store, esc, toast, run, levelBadge, fmt, scoreWith,
+    store, esc, toast, run, levelBadge, fmt, scoreWith, reportModel,
+    get data() { return { results: S.results, verdicts: S.verdicts, notes: S.notes, evidence: S.evidence }; },
     get cfg() { return CFG; },
     get years() { return YEARS; },
     get year() { return AY; },
@@ -764,6 +841,12 @@
       e.currentTarget.setAttribute("aria-expanded", String(open));
     });
     $("#print-sar").addEventListener("click", () => window.print());
+    $("#word-sar").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try { await run(() => window.IQAExport.word(AY, { cfg: CFG, data: { results: S.results, verdicts: S.verdicts, notes: S.notes, evidence: S.evidence } }), "ดาวน์โหลดไฟล์ Word แล้ว"); }
+      catch (err) { /* แจ้งแล้ว */ } finally { btn.disabled = false; }
+    });
     initEvidence();
     initAssessment();
     window.addEventListener("hashchange", () => route());
