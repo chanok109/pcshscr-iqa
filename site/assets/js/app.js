@@ -539,7 +539,7 @@
         const pct = !has(v) ? 0 : ind.dir === "min" ? Math.min(120, achievement(ind, v)) : Math.min(120, (Number(v) / ind.target) * 100);
         return `<div class="as-ind">
           <span class="as-ind-name">${esc(ind.name)}</span>
-          <span class="as-ind-target">เป้าหมาย <b>${fmtTarget(ind)}</b><small>ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)}</small></span>
+          <span class="as-ind-target"><span>เป้าหมาย <b>${fmtTarget(ind)}</b></span><small>ปี ${PY}: ${ind.prev == null ? "ตัวชี้วัดใหม่" : fmtInd(ind, ind.prev)}</small></span>
           <label class="as-ind-input">ผล <input type="number" step="any" min="0" data-result="${esc(key)}" value="${esc(v)}" ${dis}>${ind.unit && ind.unit !== "%" ? `<small>${esc(ind.unit)}</small>` : ""}</label>
           <span class="bar ${ok === false ? "miss" : ""}" aria-hidden="true"><i class="${ok == null ? "" : ok ? "lv5" : "lv1"}" style="width:${pct / 1.2}%"></i><em></em></span>
           <span class="status ${ok == null ? "" : ok ? "ok" : "miss"}">${ok == null ? "" : ok ? "บรรลุเป้าหมาย" : "ต่ำกว่าเป้าหมาย"}</span>
