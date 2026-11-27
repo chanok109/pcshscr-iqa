@@ -17,9 +17,8 @@
     checklist: "นับข้อที่ปฏิบัติได้ / เลือกระดับตาม rubric แล้วรวมคะแนน",
   };
   const UNITS = ["%", "คน", "ผลงาน", "รางวัล", "ครั้ง/ปี", "ทุน", "เครือข่าย", "ชิ้น", "เรื่อง"];
-  const TABS = [["years", "ปีการศึกษา"], ["goals", "เป้าหมาย"], ["strategies", "กลยุทธ์"], ["standards", "มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย"]];
 
-  const st = { tab: "years", year: null, draft: null, saved: "", errors: [], open: new Set(["std-0"]), bound: false };
+  const st = { tab: "years", year: null, draft: null, saved: "", errors: [], std: 0, open: new Set(["iss-0-0"]), bound: false };
 
   // ---------------------------------------------------------------- helpers
   const isDirty = () => Boolean(st.draft) && JSON.stringify(st.draft) !== st.saved;
@@ -52,6 +51,8 @@
     try { cfg = await app().loadYearConfig(year); } catch (e) { app().toast(e.message, "error"); }
     if (!cfg) cfg = M.normalizeYear({ academicYear: year, previousYear: String(Number(year) - 1) });
     st.year = year;
+    st.std = 0;
+    st.open = new Set(["iss-0-0"]);
     st.draft = cfg;
     st.saved = JSON.stringify(cfg);
     st.errors = [];
@@ -121,108 +122,154 @@
   };
 
   // ---------------------------------------------------------------- render
+  const SECTIONS = {
+    years: ["ปีการศึกษา", "เพิ่มปีการศึกษา กำหนดปีปัจจุบันของเว็บไซต์ และจัดการข้อมูลสำรอง"],
+    goals: ["เป้าหมาย", "อุดมการณ์และเป้าหมายการพัฒนาของโรงเรียน ใช้เชื่อมโยงกับกลยุทธ์"],
+    strategies: ["กลยุทธ์", "กลยุทธ์ของโรงเรียน และมาตรฐาน/เป้าหมายที่แต่ละกลยุทธ์ขับเคลื่อน"],
+    standards: ["มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย", "ประเด็นพิจารณา ตัวชี้วัด ค่าเป้าหมาย และเกณฑ์ตัดสินระดับคุณภาพของแต่ละมาตรฐาน"],
+  };
+  const itemCount = (i) => (i.indicators ? i.indicators.length : i.checklist ? i.checklist.length : i.rubric ? 1 : 0);
+  const itemWord = (s) => (s.method === "checklist" ? "รายการ" : "ตัวชี้วัด");
+  const fmtN = (v) => Number(v).toLocaleString("th-TH", { maximumFractionDigits: 2 });
+
   function render() {
     const root = $("#admin-app");
     if (!root) return;
     bind(root);
-    if (!st.draft || (st.year == null)) {
+    if (!st.draft || st.year == null) {
       root.innerHTML = `<p class="hint">กำลังโหลด…</p>`;
       edit(app().year).then(render);
       return;
     }
-    const years = app().years.years;
+    const Y = app().years;
+    const d = st.draft;
+    const nIssues = d.standards.reduce((a, s) => a + s.issues.length, 0);
+    const nav = [
+      ["years", `${Y.years.length} ปี`],
+      ["goals", `${d.goals.length} ข้อ`],
+      ["strategies", `${d.strategies.length} กลยุทธ์`],
+      ["standards", `${d.standards.length} มาตรฐาน · ${nIssues} ประเด็น`],
+    ];
     const editing = st.tab !== "years";
+    const [title, desc] = SECTIONS[st.tab];
     root.innerHTML = `
-      <div class="adm-bar">
-        <div class="adm-tabs" role="tablist">${TABS.map(([k, label]) =>
-          `<button type="button" role="tab" class="adm-tab ${st.tab === k ? "on" : ""}" aria-selected="${st.tab === k}" data-act="tab" data-tab="${k}">${label}</button>`).join("")}</div>
-        ${editing ? `<div class="adm-save">
-          <label class="adm-year">ปีการศึกษาที่แก้ไข
-            <select data-act="edit-year">${years.map((y) => `<option value="${esc(y.year)}" ${y.year === st.year ? "selected" : ""}>${esc(y.year)}</option>`).join("")}</select></label>
-          <span class="adm-dirty" id="adm-dirty" ${isDirty() ? "" : "hidden"}>มีการแก้ไขที่ยังไม่บันทึก</span>
-          <button type="button" class="btn" data-act="discard">ยกเลิกการแก้ไข</button>
-          <button type="button" class="btn primary" data-act="save">บันทึกปี ${esc(st.year)}</button>
-        </div>` : ""}
+      <div class="adm">
+        <aside class="adm-side">
+          <label class="adm-side-year">
+            <span>ปีการศึกษาที่แก้ไข</span>
+            <select data-act="edit-year">${Y.years.map((y) => `<option value="${esc(y.year)}" ${y.year === st.year ? "selected" : ""}>${esc(y.year)}</option>`).join("")}</select>
+            <small>${st.year === Y.active ? "เป็นปีปัจจุบันของเว็บไซต์" : "ไม่ใช่ปีปัจจุบันของเว็บไซต์"}</small>
+          </label>
+          <nav class="adm-nav" role="tablist" aria-label="ส่วนของหลังบ้าน">${nav.map(([k, meta]) =>
+            `<button type="button" role="tab" class="adm-nav-item ${st.tab === k ? "on" : ""}" aria-selected="${st.tab === k}" data-act="tab" data-tab="${k}">
+              <span>${SECTIONS[k][0]}</span><small>${meta}</small></button>`).join("")}</nav>
+        </aside>
+
+        <section class="adm-main">
+          <header class="adm-head">
+            <div class="adm-head-text"><h2>${title}</h2><p>${desc}</p></div>
+            ${editing ? `<div class="adm-head-actions">
+              <span class="adm-dirty" id="adm-dirty" ${isDirty() ? "" : "hidden"}>ยังไม่บันทึก</span>
+              <button type="button" class="btn" data-act="discard">ยกเลิกการแก้ไข</button>
+              <button type="button" class="btn primary" data-act="save">บันทึกปี ${esc(st.year)}</button>
+            </div>` : ""}
+          </header>
+          ${st.errors.length ? `<div class="adm-errors" role="alert"><strong>ยังบันทึกไม่ได้ ต้องแก้ ${st.errors.length} รายการ</strong><ul>${st.errors.slice(0, 10).map((e) => `<li>${esc(e)}</li>`).join("")}${st.errors.length > 10 ? `<li>และอีก ${st.errors.length - 10} รายการ</li>` : ""}</ul></div>` : ""}
+          <div class="adm-body">${({ years: renderYears, goals: renderGoals, strategies: renderStrategies, standards: renderStandards })[st.tab]()}</div>
+        </section>
       </div>
-      ${st.errors.length ? `<div class="notice adm-errors" role="alert"><strong>ยังบันทึกไม่ได้ ${st.errors.length} รายการ</strong><ul>${st.errors.slice(0, 12).map((e) => `<li>${esc(e)}</li>`).join("")}${st.errors.length > 12 ? `<li>และอีก ${st.errors.length - 12} รายการ</li>` : ""}</ul></div>` : ""}
-      <div class="adm-body">${({ years: renderYears, goals: renderGoals, strategies: renderStrategies, standards: renderStandards })[st.tab]()}</div>
       <datalist id="adm-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`;
+    root.querySelectorAll("textarea").forEach(autosize);
   }
+
+  // ให้ช่องข้อความสูงพอดีกับเนื้อหา อ่านได้ครบโดยไม่ต้องเลื่อนในช่อง
+  function autosize(t) {
+    if (!t.offsetParent) return;
+    t.rows = 1;
+    t.style.height = "auto";
+    t.style.height = t.scrollHeight + 2 + "px";
+  }
+
+  const card = (title, body, { meta = "", tools = "", cls = "" } = {}) => `
+    <section class="adm-card ${cls}">
+      <header class="adm-card-h"><h3>${title}${meta ? ` <small>${meta}</small>` : ""}</h3>${tools ? `<div class="adm-card-tools">${tools}</div>` : ""}</header>
+      ${body}
+    </section>`;
+
+  // ไอคอนปุ่มเลื่อน/ลบ — มีข้อความกำกับสำหรับโปรแกรมอ่านหน้าจอ
+  const rowTools = (list, k, n, what = "") => `<span class="adm-tools">
+      <button type="button" class="icon-btn" data-act="up" data-list="${list}" data-index="${k}" ${k === 0 ? "disabled" : ""} aria-label="เลื่อน${what}ขึ้น" title="เลื่อนขึ้น">↑</button>
+      <button type="button" class="icon-btn" data-act="down" data-list="${list}" data-index="${k}" ${k === n - 1 ? "disabled" : ""} aria-label="เลื่อน${what}ลง" title="เลื่อนลง">↓</button>
+      <button type="button" class="icon-btn danger" data-act="remove" data-list="${list}" data-index="${k}" aria-label="ลบ${what}" title="ลบ">✕</button></span>`;
 
   // ---------- ปีการศึกษา
   function renderYears() {
     const Y = app().years;
-    const rows = Y.years.map((y) => {
+    const last = Y.years[Y.years.length - 1].year;
+    const list = Y.years.slice().reverse().map((y) => {
       const active = y.year === Y.active;
-      const savedYet = Boolean(y.updatedAt);
-      return `<tr>
-        <th scope="row"><span class="code">${esc(y.year)}</span></th>
-        <td>${active ? `<span class="badge lv5"><b>✓</b>ปีปัจจุบัน</span>` : `<span class="hint">—</span>`}</td>
-        <td>${savedYet ? `${esc(new Date(y.updatedAt).toLocaleString("th-TH"))}${y.updatedBy ? `<small class="by">${esc(y.updatedBy)}</small>` : ""}` : `<span class="hint">ค่าตั้งต้นจากประกาศ (ยังไม่เคยบันทึก)</span>`}</td>
-        <td class="adm-actions">
-          <button type="button" class="btn" data-act="goto-edit" data-year="${esc(y.year)}">แก้ไข</button>
-          ${active ? "" : `<button type="button" class="btn" data-act="activate" data-year="${esc(y.year)}" ${savedYet ? "" : "disabled title=\"บันทึกปีนี้ก่อน\""}>ตั้งเป็นปีปัจจุบัน</button>
-          <button type="button" class="link danger" data-act="delete-year" data-year="${esc(y.year)}">ลบ</button>`}
-        </td></tr>`;
+      const saved = Boolean(y.updatedAt);
+      return `<li class="year-item ${active ? "is-active" : ""} ${y.year === st.year ? "is-editing" : ""}">
+        <span class="year-num">${esc(y.year)}</span>
+        <div class="year-meta">
+          <div class="year-tags">${active ? `<span class="tag tag-active">ปีปัจจุบัน</span>` : ""}${y.year === st.year ? `<span class="tag">กำลังแก้ไข</span>` : ""}${saved ? "" : `<span class="tag tag-muted">ค่าตั้งต้น ยังไม่บันทึก</span>`}</div>
+          <small>${saved ? `แก้ไขล่าสุด ${esc(new Date(y.updatedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }))}${y.updatedBy ? ` โดย ${esc(y.updatedBy)}` : ""}` : "ใช้ค่าตามประกาศของโรงเรียน กดบันทึกเพื่อเก็บลงระบบ"}</small>
+        </div>
+        <div class="year-acts">
+          <button type="button" class="btn small" data-act="goto-edit" data-year="${esc(y.year)}">แก้ไข</button>
+          ${active ? "" : `<button type="button" class="btn small" data-act="activate" data-year="${esc(y.year)}" ${saved ? "" : "disabled title=\"บันทึกปีนี้ก่อน\""}>ตั้งเป็นปีปัจจุบัน</button>
+          <button type="button" class="icon-btn danger" data-act="delete-year" data-year="${esc(y.year)}" aria-label="ลบปีการศึกษา ${esc(y.year)}" title="ลบ">✕</button>`}
+        </div>
+      </li>`;
     }).join("");
-    return `
-      <div class="table-wrap"><table>
-        <thead><tr><th>ปีการศึกษา</th><th>สถานะ</th><th>แก้ไขล่าสุด</th><th></th></tr></thead>
-        <tbody>${rows}</tbody></table></div>
-      <p class="hint">ปีปัจจุบันคือปีที่เว็บไซต์แสดงเป็นค่าเริ่มต้น ผู้ใช้เลือกดูปีอื่นได้จากตัวเลือกปีการศึกษาที่แถบด้านบน</p>
 
-      <form class="panel adm-form" data-form="newyear">
-        <h2>เพิ่มปีการศึกษา</h2>
-        <div class="adm-grid">
-          <label>ปีการศึกษา (พ.ศ.)<input name="year" inputmode="numeric" pattern="\\d{4}" maxlength="4" required placeholder="${esc(String(Number(Y.years[Y.years.length - 1].year) + 1))}"></label>
-          <label>คัดลอกค่าตั้งค่าจาก
-            <select name="from"><option value="">เริ่มต้นจากว่าง</option>${Y.years.map((y) => `<option value="${esc(y.year)}" ${y.year === Y.years[Y.years.length - 1].year ? "selected" : ""}>ปีการศึกษา ${esc(y.year)}</option>`).join("")}</select></label>
-        </div>
-        <label class="check"><input type="checkbox" name="useResults" checked>
-          <span>ใช้ผลการประเมินของปีต้นทางเป็น "ผลปีก่อน" ของปีใหม่ (ระดับคุณภาพและค่าของตัวชี้วัดแต่ละตัว)</span></label>
-        <div class="form-actions"><button class="btn primary" type="submit">สร้างปีการศึกษา</button></div>
-      </form>
-
-      <div class="panel adm-form">
-        <h2>ส่งออก / นำเข้าค่าตั้งค่า</h2>
-        <p class="hint">ไฟล์ JSON ของปีการศึกษาที่เลือก ใช้สำรองข้อมูลหรือย้ายไปเครื่องอื่น การนำเข้าจะแทนที่ฉบับร่าง ต้องกดบันทึกเพื่อใช้งาน</p>
-        <div class="toolbar">
-          <select data-act="io-year">${Y.years.map((y) => `<option value="${esc(y.year)}" ${y.year === st.year ? "selected" : ""}>ปีการศึกษา ${esc(y.year)}</option>`).join("")}</select>
-          <button type="button" class="btn" data-act="export">ส่งออก JSON</button>
-          <label class="btn file-btn">นำเข้า JSON<input type="file" accept="application/json" data-act="import" hidden></label>
-        </div>
+    return `<div class="adm-cols">
+      <div class="adm-stack">
+        ${card("ปีการศึกษาในระบบ", `<ul class="year-list">${list}</ul>
+          <p class="hint">ปีปัจจุบันคือปีที่เว็บไซต์แสดงเป็นค่าเริ่มต้น ผู้ใช้เลือกดูปีอื่นได้จากแถบด้านบน</p>`)}
       </div>
+      <div class="adm-stack">
+        <form class="adm-card" data-form="newyear">
+          <header class="adm-card-h"><h3>เพิ่มปีการศึกษา</h3></header>
+          <div class="field-grid two">
+            <label class="field">ปีการศึกษา (พ.ศ.)<input name="year" inputmode="numeric" pattern="\\d{4}" maxlength="4" required placeholder="${esc(String(Number(last) + 1))}"></label>
+            <label class="field">คัดลอกค่าตั้งค่าจาก
+              <select name="from"><option value="">เริ่มต้นจากว่าง</option>${Y.years.map((y) => `<option value="${esc(y.year)}" ${y.year === last ? "selected" : ""}>ปีการศึกษา ${esc(y.year)}</option>`).join("")}</select></label>
+          </div>
+          <label class="check"><input type="checkbox" name="useResults" checked>
+            <span>ใช้ผลการประเมินของปีต้นทางเป็น "ผลปีก่อน" ของปีใหม่</span></label>
+          <div class="adm-card-foot"><button class="btn primary" type="submit">สร้างปีการศึกษา</button></div>
+        </form>
 
-      <div class="panel adm-form">
-        <h2>สำรองข้อมูลทั้งหมด</h2>
-        <p class="hint">ดาวน์โหลดไฟล์เดียวที่รวมค่าตั้งค่า (เป้าหมาย กลยุทธ์ มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย) ผลการประเมิน ระดับที่คณะกรรมการตัดสิน จุดเด่น/จุดที่ควรพัฒนา และรายการหลักฐาน ควรสำรองหลังปิดรอบประเมินแต่ละครั้ง (ไฟล์หลักฐานจริงยังอยู่ใน Google Drive ตามลิงก์)</p>
-        <div class="toolbar">
-          <select id="backup-year" aria-label="ปีการศึกษาที่จะสำรอง">
-            <option value="">ทุกปีการศึกษา</option>
-            ${Y.years.map((y) => `<option value="${esc(y.year)}">ปีการศึกษา ${esc(y.year)}</option>`).join("")}
-          </select>
-          <button type="button" class="btn primary" data-act="backup">ดาวน์โหลดไฟล์สำรอง</button>
-        </div>
-      </div>`;
+        ${card("เครื่องมือข้อมูล", `
+          <div class="tool-row">
+            <div><strong>ค่าตั้งค่าปี ${esc(st.year)}</strong><small>ส่งออกเป็นไฟล์ หรือนำเข้าแทนฉบับร่าง (ต้องกดบันทึกหลังนำเข้า)</small></div>
+            <div class="tool-btns">
+              <button type="button" class="btn small" data-act="export">ส่งออก JSON</button>
+              <label class="btn small file-btn">นำเข้า JSON<input type="file" accept="application/json" data-act="import" hidden></label>
+            </div>
+          </div>
+          <div class="tool-row">
+            <div><strong>สำรองข้อมูลทั้งหมด</strong><small>ค่าตั้งค่า ผลการประเมิน ระดับที่ตัดสิน บันทึก และรายการหลักฐาน ในไฟล์เดียว</small></div>
+            <div class="tool-btns">
+              <select id="backup-year" aria-label="ปีการศึกษาที่จะสำรอง"><option value="">ทุกปีการศึกษา</option>${Y.years.map((y) => `<option value="${esc(y.year)}">ปี ${esc(y.year)}</option>`).join("")}</select>
+              <button type="button" class="btn small primary" data-act="backup">ดาวน์โหลด</button>
+            </div>
+          </div>`)}
+      </div>
+    </div>`;
   }
 
   // ---------- เป้าหมาย
-  const rowTools = (list, k, n) => `<span class="adm-tools">
-      <button type="button" class="icon-btn" data-act="up" data-list="${list}" data-index="${k}" ${k === 0 ? "disabled" : ""} aria-label="เลื่อนขึ้น">↑</button>
-      <button type="button" class="icon-btn" data-act="down" data-list="${list}" data-index="${k}" ${k === n - 1 ? "disabled" : ""} aria-label="เลื่อนลง">↓</button>
-      <button type="button" class="icon-btn danger" data-act="remove" data-list="${list}" data-index="${k}" aria-label="ลบ">✕</button></span>`;
-
   function renderGoals() {
     const g = st.draft.goals;
-    return `<div class="panel">
-      <h2>เป้าหมาย ปีการศึกษา ${esc(st.year)}</h2>
-      <p class="hint">อุดมการณ์และเป้าหมายการพัฒนาของโรงเรียน ใช้เชื่อมโยงกับกลยุทธ์</p>
-      <div class="adm-list">${g.map((x, k) => `<div class="adm-row">
-        <label class="adm-code">ข้อ<input data-bind="goals.${k}.code" value="${esc(x.code)}"></label>
-        <label class="adm-grow">ข้อความ<textarea rows="2" data-bind="goals.${k}.text">${esc(x.text)}</textarea></label>
-        ${rowTools("goals", k, g.length)}</div>`).join("") || `<p class="empty">ยังไม่มีเป้าหมาย</p>`}</div>
-      <button type="button" class="btn" data-act="add" data-list="goals" data-kind="goal">+ เพิ่มเป้าหมาย</button>
-    </div>`;
+    return card(`เป้าหมาย ปีการศึกษา ${esc(st.year)}`, `
+      <ol class="num-list">${g.map((x, k) => `<li class="num-item">
+        <input class="num-badge" data-bind="goals.${k}.code" value="${esc(x.code)}" aria-label="ข้อที่">
+        <textarea rows="2" data-bind="goals.${k}.text" aria-label="ข้อความเป้าหมาย" placeholder="ข้อความเป้าหมาย">${esc(x.text)}</textarea>
+        ${rowTools("goals", k, g.length, "เป้าหมาย")}</li>`).join("") || `<li class="empty">ยังไม่มีเป้าหมาย</li>`}</ol>
+      <button type="button" class="btn add-btn" data-act="add" data-list="goals" data-kind="goal">+ เพิ่มเป้าหมาย</button>`,
+    { meta: `${g.length} ข้อ` });
   }
 
   // ---------- กลยุทธ์
@@ -230,33 +277,41 @@
     const ss = st.draft.strategies;
     const goals = st.draft.goals;
     const stds = st.draft.standards;
-    return `<div class="panel">
-      <h2>กลยุทธ์ ปีการศึกษา ${esc(st.year)}</h2>
-      <p class="hint">เชื่อมโยงแต่ละกลยุทธ์กับเป้าหมายและมาตรฐานที่ขับเคลื่อน ใช้แสดงในหน้ามาตรฐาน</p>
-      <div class="adm-list">${ss.map((x, k) => `<div class="adm-card">
-        <div class="adm-row">
-          <label class="adm-code">กลยุทธ์ที่<input data-bind="strategies.${k}.code" value="${esc(x.code)}"></label>
-          <label class="adm-grow">ชื่อกลยุทธ์<textarea rows="2" data-bind="strategies.${k}.name">${esc(x.name)}</textarea></label>
-          ${rowTools("strategies", k, ss.length)}
+    return `<div class="adm-stack">${ss.map((x, k) => `
+      <article class="adm-card strat">
+        <div class="num-item">
+          <input class="num-badge" data-bind="strategies.${k}.code" value="${esc(x.code)}" aria-label="กลยุทธ์ที่">
+          <textarea rows="2" data-bind="strategies.${k}.name" aria-label="ชื่อกลยุทธ์" placeholder="ชื่อกลยุทธ์">${esc(x.name)}</textarea>
+          ${rowTools("strategies", k, ss.length, "กลยุทธ์")}
         </div>
-        <fieldset class="adm-links"><legend>เชื่อมกับมาตรฐาน</legend>
-          ${stds.map((s) => `<label class="pill"><input type="checkbox" data-toggle="strategies.${k}.standards" value="${esc(s.code)}" ${x.standards.includes(s.code) ? "checked" : ""}> มาตรฐานที่ ${esc(s.code)}</label>`).join("") || `<span class="hint">ยังไม่มีมาตรฐาน</span>`}
-        </fieldset>
-        <fieldset class="adm-links"><legend>เชื่อมกับเป้าหมาย</legend>
-          ${goals.map((g) => `<label class="pill" title="${esc(g.text)}"><input type="checkbox" data-toggle="strategies.${k}.goals" value="${esc(g.id)}" ${x.goals.includes(g.id) ? "checked" : ""}> เป้าหมาย ${esc(g.code)}</label>`).join("") || `<span class="hint">ยังไม่มีเป้าหมาย</span>`}
-        </fieldset>
-      </div>`).join("") || `<p class="empty">ยังไม่มีกลยุทธ์</p>`}</div>
-      <button type="button" class="btn" data-act="add" data-list="strategies" data-kind="strategy">+ เพิ่มกลยุทธ์</button>
+        <div class="strat-links">
+          <div><h4>มาตรฐานที่ขับเคลื่อน</h4><div class="pills">${stds.map((s) => `<label class="pill"><input type="checkbox" data-toggle="strategies.${k}.standards" value="${esc(s.code)}" ${x.standards.includes(s.code) ? "checked" : ""}> มาตรฐานที่ ${esc(s.code)}</label>`).join("") || `<span class="hint">ยังไม่มีมาตรฐาน</span>`}</div></div>
+          <div><h4>เป้าหมายที่เกี่ยวข้อง</h4><div class="pills">${goals.map((g) => `<label class="pill" title="${esc(g.text)}"><input type="checkbox" data-toggle="strategies.${k}.goals" value="${esc(g.id)}" ${x.goals.includes(g.id) ? "checked" : ""}> ${esc(g.code)}</label>`).join("") || `<span class="hint">ยังไม่มีเป้าหมาย</span>`}</div></div>
+        </div>
+      </article>`).join("") || `<div class="adm-card"><p class="empty">ยังไม่มีกลยุทธ์</p></div>`}
+      <button type="button" class="btn add-btn" data-act="add" data-list="strategies" data-kind="strategy">+ เพิ่มกลยุทธ์</button>
     </div>`;
   }
 
-  // ---------- มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย
+  // ---------- มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย (เลือกทีละมาตรฐาน)
   function renderStandards() {
     const stds = st.draft.standards;
-    return `
-      <p class="hint">กำหนดมาตรฐาน ประเด็นพิจารณา ตัวชี้วัด ค่าเป้าหมาย และเกณฑ์การตัดสินของปีการศึกษา ${esc(st.year)} ผลการประเมินที่บันทึกไว้ผูกกับตัวชี้วัดแต่ละตัว จัดเรียงใหม่ได้โดยผลไม่เปลี่ยน แต่หากลบตัวชี้วัด ผลของตัวชี้วัดนั้นจะไม่แสดงอีก</p>
-      ${stds.map((s, si) => renderStandard(s, si, stds.length)).join("") || `<p class="empty">ยังไม่มีมาตรฐาน</p>`}
-      <button type="button" class="btn" data-act="add" data-list="standards" data-kind="standard">+ เพิ่มมาตรฐาน</button>`;
+    if (st.std >= stds.length) st.std = Math.max(0, stds.length - 1);
+    const picker = stds.map((s, si) => {
+      const n = s.issues.reduce((a, i) => a + itemCount(i), 0);
+      return `<li><button type="button" class="std-pick ${si === st.std ? "on" : ""}" data-act="pick-std" data-index="${si}" aria-current="${si === st.std}">
+        <span class="std-no">มาตรฐานที่ ${esc(s.code)}</span>
+        <strong>${esc(s.name) || "ยังไม่มีชื่อ"}</strong>
+        <small>${s.issues.length} ประเด็น · ${n} ${itemWord(s)}</small></button></li>`;
+    }).join("");
+    return `<div class="std-layout">
+      <nav class="std-picker" aria-label="เลือกมาตรฐาน">
+        <select class="std-picker-select" data-act="pick-std-select" aria-label="เลือกมาตรฐาน">${stds.map((s, si) => `<option value="${si}" ${si === st.std ? "selected" : ""}>มาตรฐานที่ ${esc(s.code)} ${esc(s.name)}</option>`).join("")}</select>
+        <ol>${picker}</ol>
+        <button type="button" class="btn add-btn" data-act="add" data-list="standards" data-kind="standard">+ เพิ่มมาตรฐาน</button>
+      </nav>
+      <div class="std-detail">${stds.length ? renderStandard(stds[st.std], st.std, stds.length) : `<div class="adm-card"><p class="empty">ยังไม่มีมาตรฐาน เริ่มจากปุ่ม "เพิ่มมาตรฐาน"</p></div>`}</div>
+    </div>`;
   }
 
   function renderStandard(s, si, n) {
@@ -264,78 +319,105 @@
     const bandsKey = s.method === "checklist" ? "scoreBands" : "bands";
     const bands = s[bandsKey] || [];
     const rv = s.review || {};
-    return `<details class="panel adm-std" data-key="std-${si}" ${st.open.has(`std-${si}`) ? "open" : ""}>
-      <summary><span class="std-no">มาตรฐานที่ ${esc(s.code)}</span> ${esc(s.name) || `<span class="hint">ยังไม่มีชื่อ</span>`} <small>${s.issues.length} ประเด็น</small></summary>
-      <div class="adm-std-head">
-        <div class="adm-grid">
-          <label class="adm-code">รหัส<input data-bind="${P}.code" value="${esc(s.code)}"></label>
-          <label class="adm-grow">ชื่อมาตรฐาน<input data-bind="${P}.name" value="${esc(s.name)}"></label>
-          <label>วิธีตัดสินระดับคุณภาพ<select data-act="method" data-std="${si}">${Object.entries(METHODS).map(([k, v]) => `<option value="${k}" ${s.method === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-          <label>ค่าเป้าหมายระดับมาตรฐาน<input data-bind="${P}.targetText" value="${esc(s.targetText)}" placeholder="เช่น ยอดเยี่ยม (ร้อยละ 90.81)"></label>
-          <label>ผลปี ${esc(st.draft.previousYear)}<select data-bind="${P}.prev.level" data-type="level">${levelOptions(s.prev && s.prev.level)}</select></label>
-          <label>นวัตกรรม/วิธีปฏิบัติที่เป็นเลิศ<input data-bind="${P}.model" value="${esc(s.model)}"></label>
-        </div>
-        <label>จุดเน้น<textarea rows="2" data-bind="${P}.focus">${esc(s.focus)}</textarea></label>
-        <label>คำอธิบายเกณฑ์การตัดสิน (แสดงในหน้ามาตรฐาน)<textarea rows="2" data-bind="${P}.criteria">${esc(s.criteria)}</textarea></label>
-        <fieldset class="adm-bands"><legend>เกณฑ์ระดับคุณภาพ — ${s.method === "checklist" ? "คะแนนรวมขั้นต่ำ" : s.method === "achievement" ? "ร้อยละความสำเร็จขั้นต่ำ" : "ค่าร้อยละขั้นต่ำ"}</legend>
-          ${bands.filter((b) => b.level > 1).map((b) => {
-            const k = bands.indexOf(b);
-            return `<label><span class="badge lv${b.level}"><b>${b.level}</b>${LEVEL_NAMES[b.level]}</span><input type="number" step="any" data-type="num" data-bind="${P}.${bandsKey}.${k}.min" value="${esc(b.min)}"></label>`;
-          }).join("")}
-          <span class="hint">ต่ำกว่าระดับปานกลาง = กำลังพัฒนา</span>
-        </fieldset>
-        <details class="adm-sub" data-key="rv-${si}" ${st.open.has(`rv-${si}`) ? "open" : ""}><summary>สรุปจาก SAR ปีก่อน (จุดเด่น / จุดที่ควรพัฒนา / ข้อเสนอแนะ)</summary>
-          <div class="adm-grid three">
-            <label>จุดเด่น (บรรทัดละข้อ)<textarea rows="4" data-type="lines" data-bind="${P}.review.strengths">${esc((rv.strengths || []).join("\n"))}</textarea></label>
-            <label>จุดที่ควรพัฒนา<textarea rows="4" data-type="lines" data-bind="${P}.review.improve">${esc((rv.improve || []).join("\n"))}</textarea></label>
-            <label>ข้อเสนอแนะ<textarea rows="4" data-type="lines" data-bind="${P}.review.suggest">${esc((rv.suggest || []).join("\n"))}</textarea></label>
-          </div>
-        </details>
-        <div class="adm-std-tools">${rowTools("standards", si, n)}</div>
+    const rvCount = ["strengths", "improve", "suggest"].map((k) => (rv[k] || []).length);
+    const unit = s.method === "checklist" ? "คะแนนรวม" : s.method === "achievement" ? "ร้อยละความสำเร็จ" : "ร้อยละ";
+
+    const info = card(`มาตรฐานที่ ${esc(s.code)}`, `
+      <div class="field-grid">
+        <label class="field narrow">รหัส<input data-bind="${P}.code" value="${esc(s.code)}"></label>
+        <label class="field wide">ชื่อมาตรฐาน<input data-bind="${P}.name" value="${esc(s.name)}"></label>
+        <label class="field">ค่าเป้าหมายระดับมาตรฐาน<input data-bind="${P}.targetText" value="${esc(s.targetText)}" placeholder="เช่น ยอดเยี่ยม (ร้อยละ 90.81)"></label>
+        <label class="field">ผลปี ${esc(st.draft.previousYear)}<select data-bind="${P}.prev.level" data-type="level">${levelOptions(s.prev && s.prev.level)}</select></label>
+        <label class="field wide">นวัตกรรม/วิธีปฏิบัติที่เป็นเลิศ<input data-bind="${P}.model" value="${esc(s.model)}"></label>
+        <label class="field full">จุดเน้น<textarea rows="2" data-bind="${P}.focus">${esc(s.focus)}</textarea></label>
+      </div>`, { tools: rowTools("standards", si, n, "มาตรฐาน") });
+
+    const method = card("วิธีตัดสินระดับคุณภาพ", `
+      <div class="method-grid" role="radiogroup" aria-label="วิธีตัดสินระดับคุณภาพ">${Object.entries(METHODS).map(([k, v]) => `
+        <label class="method-opt ${s.method === k ? "on" : ""}">
+          <input type="radio" name="method-${si}" value="${k}" data-act="method" data-std="${si}" ${s.method === k ? "checked" : ""}>
+          <strong>${({ percent: "ค่าร้อยละ", achievement: "ความสำเร็จเทียบเป้าหมาย", checklist: "รายการตรวจสอบ / rubric" })[k]}</strong>
+          <small>${v}</small></label>`).join("")}</div>
+      <div class="bands">
+        <span class="bands-label">เกณฑ์ขั้นต่ำ (${unit})</span>
+        ${bands.filter((b) => b.level > 1).map((b) => `<label class="band"><span class="badge lv${b.level}"><b>${b.level}</b>${LEVEL_NAMES[b.level]}</span>
+          <input type="number" step="any" data-type="num" data-bind="${P}.${bandsKey}.${bands.indexOf(b)}.min" value="${esc(b.min)}" aria-label="เกณฑ์ขั้นต่ำระดับ ${LEVEL_NAMES[b.level]}"></label>`).join("")}
+        <span class="hint">ต่ำกว่าระดับปานกลาง = กำลังพัฒนา</span>
       </div>
-      <h3 class="adm-h">ประเด็นพิจารณา</h3>
-      ${s.issues.map((i, ii) => renderIssue(s, si, i, ii)).join("") || `<p class="empty">ยังไม่มีประเด็นพิจารณา</p>`}
-      <button type="button" class="btn" data-act="add" data-list="${P}.issues" data-kind="issue" data-std="${si}">+ เพิ่มประเด็นพิจารณา</button>
+      <label class="field full">คำอธิบายเกณฑ์ (แสดงในหน้ามาตรฐาน)<textarea rows="2" data-bind="${P}.criteria">${esc(s.criteria)}</textarea></label>`);
+
+    const review = `<details class="adm-card adm-collapse" data-key="rv-${si}" ${st.open.has(`rv-${si}`) ? "open" : ""}>
+      <summary class="adm-card-h"><h3>สรุปจาก SAR ปีก่อน <small>${rvCount[0]} จุดเด่น · ${rvCount[1]} จุดที่ควรพัฒนา · ${rvCount[2]} ข้อเสนอแนะ</small></h3><span class="chev" aria-hidden="true"></span></summary>
+      <div class="field-grid three">
+        <label class="field">จุดเด่น <small>บรรทัดละข้อ</small><textarea rows="5" data-type="lines" data-bind="${P}.review.strengths">${esc((rv.strengths || []).join("\n"))}</textarea></label>
+        <label class="field">จุดที่ควรพัฒนา <small>บรรทัดละข้อ</small><textarea rows="5" data-type="lines" data-bind="${P}.review.improve">${esc((rv.improve || []).join("\n"))}</textarea></label>
+        <label class="field">ข้อเสนอแนะ <small>บรรทัดละข้อ</small><textarea rows="5" data-type="lines" data-bind="${P}.review.suggest">${esc((rv.suggest || []).join("\n"))}</textarea></label>
+      </div>
     </details>`;
+
+    const issues = card("ประเด็นพิจารณา", `
+      <div class="issue-list">${s.issues.map((i, ii) => renderIssue(s, si, i, ii)).join("") || `<p class="empty">ยังไม่มีประเด็นพิจารณา</p>`}</div>
+      <button type="button" class="btn add-btn" data-act="add" data-list="${P}.issues" data-kind="issue" data-std="${si}">+ เพิ่มประเด็นพิจารณา</button>`,
+    { meta: `${s.issues.length} ประเด็น`, cls: "issues-card" });
+
+    return `<div class="adm-stack">${info}${method}${issues}${review}</div>`;
   }
 
   function renderIssue(s, si, i, ii) {
     const P = `standards.${si}.issues.${ii}`;
     const kind = i.rubric ? "rubric" : i.checklist ? "checklist" : "indicators";
+    const key = `iss-${si}-${ii}`;
+    const n = itemCount(i);
+    let summary = kind === "rubric" ? "เลือกระดับตาม rubric" : `${n} ${kind === "checklist" ? "รายการ" : "ตัวชี้วัด"}`;
+    if (kind === "indicators" && s.method === "percent" && n) {
+      const t = i.indicators.map((x) => Number(x.target)).filter((x) => isFinite(x) && x > 0);
+      if (t.length) summary += ` · เป้าหมายเฉลี่ย ${fmtN(t.reduce((a, b) => a + b, 0) / t.length)}`;
+    }
     let body = "";
     if (kind === "indicators") {
-      body = `<div class="table-wrap"><table class="adm-table">
-        <thead><tr><th>ตัวชี้วัด</th><th class="num">ค่าเป้าหมาย</th><th>หน่วย</th><th>ทิศทาง</th><th class="num">ผลปี ${esc(st.draft.previousYear)}</th><th></th></tr></thead>
-        <tbody>${i.indicators.map((ind, k) => `<tr>
-          <td><textarea rows="2" data-bind="${P}.indicators.${k}.name" aria-label="ชื่อตัวชี้วัด">${esc(ind.name)}</textarea></td>
-          <td><input type="number" step="any" min="0" class="num-in" data-type="num" data-bind="${P}.indicators.${k}.target" value="${esc(ind.target ?? "")}" aria-label="ค่าเป้าหมาย"></td>
-          <td><input list="adm-units" class="unit-in" data-bind="${P}.indicators.${k}.unit" value="${esc(ind.unit || "%")}" aria-label="หน่วย"></td>
-          <td><select data-bind="${P}.indicators.${k}.dir" aria-label="ทิศทาง"><option value="max" ${ind.dir !== "min" ? "selected" : ""}>ไม่น้อยกว่า</option><option value="min" ${ind.dir === "min" ? "selected" : ""}>ไม่เกิน</option></select></td>
-          <td><input type="number" step="any" min="0" class="num-in" data-type="num" data-bind="${P}.indicators.${k}.prev" value="${esc(ind.prev ?? "")}" placeholder="ใหม่" aria-label="ผลปีก่อน"></td>
-          <td>${rowTools(`${P}.indicators`, k, i.indicators.length)}</td></tr>`).join("")
-          || `<tr><td colspan="6" class="empty">ยังไม่มีตัวชี้วัด</td></tr>`}</tbody></table></div>
-        <button type="button" class="btn small" data-act="add" data-list="${P}.indicators" data-kind="indicator">+ เพิ่มตัวชี้วัด</button>`;
-    } else if (kind === "checklist") {
-      body = `<ol class="adm-checks">${i.checklist.map((c, k) => `<li class="adm-row">
-          <label class="adm-grow"><span class="sr-only">รายการที่ ${k + 1}</span><textarea rows="2" data-bind="${P}.checklist.${k}.text">${esc(c.text)}</textarea></label>
-          ${rowTools(`${P}.checklist`, k, i.checklist.length)}</li>`).join("") || `<li class="empty">ยังไม่มีรายการ</li>`}</ol>
-        <button type="button" class="btn small" data-act="add" data-list="${P}.checklist" data-kind="check">+ เพิ่มรายการประเมิน</button>`;
-    } else {
-      body = `<div class="adm-rubric">${[4, 3, 2, 1, 0].map((k) => `<label><span class="badge lv${k + 1}"><b>${k + 1}</b>${LEVEL_NAMES[k + 1]}</span>
-          <textarea rows="2" data-bind="${P}.rubric.${k}">${esc(i.rubric[k])}</textarea></label>`).join("")}</div>`;
-    }
-    return `<div class="adm-issue">
-      <div class="adm-row">
-        <label class="adm-code">รหัส<input data-bind="${P}.code" value="${esc(i.code)}"></label>
-        <label class="adm-grow">ประเด็นพิจารณา<textarea rows="2" data-bind="${P}.name">${esc(i.name)}</textarea></label>
-        <label>ผลปี ${esc(st.draft.previousYear)}<select data-bind="${P}.prevLevel" data-type="level">${levelOptions(i.prevLevel)}</select></label>
-        ${s.method === "checklist" ? `<label>รูปแบบ<select data-act="issue-kind" data-path="${P}">
-          <option value="checklist" ${kind === "checklist" ? "selected" : ""}>รายการตรวจสอบ</option>
-          <option value="rubric" ${kind === "rubric" ? "selected" : ""}>เลือกระดับ (rubric)</option></select></label>` : ""}
-        ${rowTools(`standards.${si}.issues`, ii, s.issues.length)}
+      body = `<div class="ind-table" role="table" aria-label="ตัวชี้วัดของประเด็น ${esc(i.code)}">
+        <div class="ind-row ind-head" role="row"><span role="columnheader">#</span><span role="columnheader">ตัวชี้วัด</span><span role="columnheader">ค่าเป้าหมาย</span><span role="columnheader">หน่วย</span><span role="columnheader">ทิศทาง</span><span role="columnheader">ผลปี ${esc(st.draft.previousYear)}</span><span role="columnheader"><span class="sr-only">จัดการ</span></span></div>
+        ${i.indicators.map((ind, k) => `<div class="ind-row" role="row">
+          <span class="ind-no" role="cell">${k + 1}</span>
+          <label role="cell" class="ind-name"><span class="sr-only">ชื่อตัวชี้วัด</span><textarea rows="2" data-bind="${P}.indicators.${k}.name" placeholder="ชื่อตัวชี้วัด">${esc(ind.name)}</textarea></label>
+          <label role="cell"><span class="ind-lbl">ค่าเป้าหมาย</span><input type="number" step="any" min="0" class="num-in" data-type="num" data-bind="${P}.indicators.${k}.target" value="${esc(ind.target ?? "")}"></label>
+          <label role="cell"><span class="ind-lbl">หน่วย</span><input list="adm-units" class="unit-in" data-bind="${P}.indicators.${k}.unit" value="${esc(ind.unit || "%")}"></label>
+          <label role="cell"><span class="ind-lbl">ทิศทาง</span><select data-bind="${P}.indicators.${k}.dir"><option value="max" ${ind.dir !== "min" ? "selected" : ""}>ไม่น้อยกว่า</option><option value="min" ${ind.dir === "min" ? "selected" : ""}>ไม่เกิน</option></select></label>
+          <label role="cell"><span class="ind-lbl">ผลปีก่อน</span><input type="number" step="any" min="0" class="num-in" data-type="num" data-bind="${P}.indicators.${k}.prev" value="${esc(ind.prev ?? "")}" placeholder="ใหม่"></label>
+          <span role="cell">${rowTools(`${P}.indicators`, k, i.indicators.length, "ตัวชี้วัด")}</span>
+        </div>`).join("") || `<p class="empty">ยังไม่มีตัวชี้วัด</p>`}
       </div>
-      ${body}
-    </div>`;
+      <button type="button" class="btn small add-btn" data-act="add" data-list="${P}.indicators" data-kind="indicator">+ เพิ่มตัวชี้วัด</button>`;
+    } else if (kind === "checklist") {
+      body = `<ol class="num-list compact">${i.checklist.map((c, k) => `<li class="num-item">
+          <span class="num-badge static">${esc(i.code)}.${k + 1}</span>
+          <textarea rows="2" data-bind="${P}.checklist.${k}.text" aria-label="รายการที่ ${k + 1}">${esc(c.text)}</textarea>
+          ${rowTools(`${P}.checklist`, k, i.checklist.length, "รายการ")}</li>`).join("") || `<li class="empty">ยังไม่มีรายการ</li>`}</ol>
+        <button type="button" class="btn small add-btn" data-act="add" data-list="${P}.checklist" data-kind="check">+ เพิ่มรายการประเมิน</button>`;
+    } else {
+      body = `<div class="rubric-edit">${[4, 3, 2, 1, 0].map((k) => `<label><span class="badge lv${k + 1}"><b>${k + 1}</b>${LEVEL_NAMES[k + 1]}</span>
+          <textarea rows="2" data-bind="${P}.rubric.${k}" aria-label="คำอธิบายระดับ ${LEVEL_NAMES[k + 1]}">${esc(i.rubric[k])}</textarea></label>`).join("")}</div>`;
+    }
+    return `<details class="issue" data-key="${key}" ${st.open.has(key) ? "open" : ""}>
+      <summary class="issue-sum">
+        <span class="issue-code">${esc(i.code) || "—"}</span>
+        <span class="issue-name">${esc(i.name) || `<span class="hint">ยังไม่มีชื่อ</span>`}</span>
+        <span class="issue-meta">${summary}</span>
+        <span class="chev" aria-hidden="true"></span>
+      </summary>
+      <div class="issue-body">
+        <div class="field-grid issue-grid ${s.method === "checklist" ? "with-kind" : ""}">
+          <label class="field">รหัส<input data-bind="${P}.code" value="${esc(i.code)}"></label>
+          <label class="field">ประเด็นพิจารณา<textarea rows="2" data-bind="${P}.name">${esc(i.name)}</textarea></label>
+          <label class="field">ผลปี ${esc(st.draft.previousYear)}<select data-bind="${P}.prevLevel" data-type="level">${levelOptions(i.prevLevel)}</select></label>
+          ${s.method === "checklist" ? `<label class="field">รูปแบบการประเมิน<select data-act="issue-kind" data-path="${P}">
+            <option value="checklist" ${kind === "checklist" ? "selected" : ""}>รายการตรวจสอบ</option>
+            <option value="rubric" ${kind === "rubric" ? "selected" : ""}>เลือกระดับ (rubric)</option></select></label>` : ""}
+        </div>
+        ${body}
+        <div class="issue-foot"><span class="hint">จัดการประเด็นนี้</span>${rowTools(`standards.${si}.issues`, ii, s.issues.length, "ประเด็น")}</div>
+      </div>
+    </details>`;
   }
 
   // ---------------------------------------------------------------- actions
@@ -481,6 +563,7 @@
 
     root.addEventListener("input", (e) => {
       const el = e.target;
+      if (el.tagName === "TEXTAREA") autosize(el);
       if (el.dataset.bind && el.tagName !== "SELECT") onBind(el);
     });
 
@@ -509,6 +592,10 @@
         if (!confirmDiscard()) { el.value = st.year; return; }
         await edit(el.value);
         render();
+      } else if (act === "pick-std-select") {
+        st.std = Number(el.value);
+        st.open.add(`iss-${st.std}-0`);
+        render();
       } else if (act === "io-year") {
         if (!confirmDiscard()) { el.value = st.year; return; }
         await edit(el.value);
@@ -532,7 +619,13 @@
       const el = e.target.closest("[data-act]");
       if (!el || el.tagName === "SELECT" || el.type === "file") return;
       const act = el.dataset.act;
-      if (act === "tab") { st.tab = el.dataset.tab; st.errors = []; render(); return; }
+      if (act === "tab") { st.tab = el.dataset.tab; st.errors = []; render(); window.scrollTo(0, 0); return; }
+      if (act === "pick-std") {
+        st.std = Number(el.dataset.index);
+        st.open.add(`iss-${st.std}-0`);
+        render();
+        return;
+      }
       if (act === "save") { await save(); return; }
       if (act === "discard") {
         if (!isDirty() || confirm("ทิ้งการแก้ไขทั้งหมดที่ยังไม่บันทึก?")) { st.draft = JSON.parse(st.saved); st.errors = []; render(); }
@@ -585,16 +678,22 @@
         const kind = el.dataset.kind;
         const item = kind === "issue" ? newIssue(st.draft.standards[Number(el.dataset.std)]) : TEMPLATES[kind](list);
         list.push(item);
-        if (kind === "standard") st.open.add(`std-${list.length - 1}`);
-      } else if (act === "up") moveItem(list, k, -1);
-      else if (act === "down") moveItem(list, k, 1);
+        if (kind === "standard") st.std = list.length - 1;
+        if (kind === "issue") st.open.add(`iss-${el.dataset.std}-${list.length - 1}`);
+      } else if (act === "up" || act === "down") {
+        moveItem(list, k, act === "up" ? -1 : 1);
+        if (listPath === "standards" && st.std === k) st.std = k + (act === "up" ? -1 : 1);
+      }
       else if (act === "remove") {
         const label = listPath.endsWith("indicators") ? "ตัวชี้วัด" : listPath.endsWith("issues") ? "ประเด็นพิจารณา" : listPath === "standards" ? "มาตรฐาน" : "รายการ";
         if (!confirm(`ลบ${label}นี้?`)) return;
         const [removed] = list.splice(k, 1);
         // ลบการเชื่อมโยงที่อ้างถึงสิ่งที่ถูกลบ
         if (listPath === "goals") st.draft.strategies.forEach((s) => { s.goals = s.goals.filter((id) => id !== removed.id); });
-        if (listPath === "standards") st.draft.strategies.forEach((s) => { s.standards = s.standards.filter((c) => c !== removed.code); });
+        if (listPath === "standards") {
+          st.draft.strategies.forEach((s) => { s.standards = s.standards.filter((c) => c !== removed.code); });
+          st.std = Math.min(st.std, Math.max(0, list.length - 1));
+        }
       }
       render();
     });
@@ -606,7 +705,7 @@
     root.addEventListener("toggle", (e) => {
       const key = e.target.dataset && e.target.dataset.key;
       if (!key) return;
-      if (e.target.open) st.open.add(key); else st.open.delete(key);
+      if (e.target.open) { st.open.add(key); e.target.querySelectorAll("textarea").forEach(autosize); } else st.open.delete(key);
     }, true);
 
     window.addEventListener("beforeunload", (e) => {
