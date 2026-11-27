@@ -19,6 +19,9 @@
     cfg.goals = Array.isArray(cfg.goals) ? cfg.goals : [];
     cfg.strategies = Array.isArray(cfg.strategies) ? cfg.strategies : [];
     cfg.standards = Array.isArray(cfg.standards) ? cfg.standards : [];
+    // เอกสารให้ดาวน์โหลด (ลิงก์ไฟล์ใน Google Drive) ของปีการศึกษานั้น
+    cfg.documents = Array.isArray(cfg.documents) ? cfg.documents : [];
+    cfg.documents.forEach((d) => { if (!d.id) d.id = "d" + uid(); d.title = d.title || ""; d.category = d.category || ""; d.url = d.url || ""; d.note = d.note || ""; });
     cfg.goals.forEach((g, k) => { if (!g.id) g.id = "g" + (k + 1) + uid(); });
     cfg.strategies.forEach((s, k) => {
       if (!s.id) s.id = "s" + (k + 1) + uid();

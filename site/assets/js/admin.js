@@ -70,6 +70,10 @@
     const seenIssue = new Set();
     cfg.goals.forEach((g, k) => { if (!String(g.text || "").trim()) errs.push(`เป้าหมายลำดับที่ ${k + 1}: ยังไม่ได้กรอกข้อความ`); });
     cfg.strategies.forEach((s, k) => { if (!String(s.name || "").trim()) errs.push(`กลยุทธ์ลำดับที่ ${k + 1}: ยังไม่ได้กรอกชื่อกลยุทธ์`); });
+    (cfg.documents || []).forEach((d, k) => {
+      if (!String(d.title || "").trim()) errs.push(`เอกสารลำดับที่ ${k + 1}: ยังไม่ได้กรอกชื่อเอกสาร`);
+      if (!/^https:\/\/\S+$/i.test(String(d.url || "").trim())) errs.push(`เอกสารลำดับที่ ${k + 1}: ลิงก์ต้องขึ้นต้นด้วย https://`);
+    });
     cfg.standards.forEach((s, si) => {
       const where = `มาตรฐานลำดับที่ ${si + 1}${s.code ? ` (มาตรฐานที่ ${s.code})` : ""}`;
       if (!/^\d+$/.test(String(s.code || ""))) errs.push(`${where}: รหัสมาตรฐานต้องเป็นตัวเลข`);
@@ -119,6 +123,7 @@
     }),
     indicator: () => ({ id: M.uid(), name: "", target: null, prev: null, unit: "%", dir: "max" }),
     check: () => ({ id: M.uid(), text: "" }),
+    doc: () => ({ id: "d" + M.uid(), title: "", category: "ประกาศ", url: "", note: "" }),
   };
 
   // ---------------------------------------------------------------- render
@@ -127,7 +132,9 @@
     goals: ["เป้าหมาย", "อุดมการณ์และเป้าหมายการพัฒนาของโรงเรียน ใช้เชื่อมโยงกับกลยุทธ์"],
     strategies: ["กลยุทธ์", "กลยุทธ์ของโรงเรียน และมาตรฐาน/เป้าหมายที่แต่ละกลยุทธ์ขับเคลื่อน"],
     standards: ["มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย", "ประเด็นพิจารณา ตัวชี้วัด ค่าเป้าหมาย และเกณฑ์ตัดสินระดับคุณภาพของแต่ละมาตรฐาน"],
+    documents: ["เอกสาร", "ลิงก์เอกสารให้ครูเปิดหรือดาวน์โหลดจากหน้าแรก เช่น ประกาศ คำสั่ง แบบฟอร์ม คู่มือ"],
   };
+  const DOC_CATS = ["ประกาศ", "คำสั่ง", "แบบฟอร์ม", "คู่มือ", "รายงาน", "แผน"];
   const itemCount = (i) => (i.indicators ? i.indicators.length : i.checklist ? i.checklist.length : i.rubric ? 1 : 0);
   const itemWord = (s) => (s.method === "checklist" ? "รายการ" : "ตัวชี้วัด");
   const fmtN = (v) => Number(v).toLocaleString("th-TH", { maximumFractionDigits: 2 });
@@ -149,6 +156,7 @@
       ["goals", `${d.goals.length} ข้อ`],
       ["strategies", `${d.strategies.length} กลยุทธ์`],
       ["standards", `${d.standards.length} มาตรฐาน · ${nIssues} ประเด็น`],
+      ["documents", `${d.documents.length} รายการ`],
     ];
     const editing = st.tab !== "years";
     const [title, desc] = SECTIONS[st.tab];
@@ -175,10 +183,11 @@
             </div>` : ""}
           </header>
           ${st.errors.length ? `<div class="adm-errors" role="alert"><strong>ยังบันทึกไม่ได้ ต้องแก้ ${st.errors.length} รายการ</strong><ul>${st.errors.slice(0, 10).map((e) => `<li>${esc(e)}</li>`).join("")}${st.errors.length > 10 ? `<li>และอีก ${st.errors.length - 10} รายการ</li>` : ""}</ul></div>` : ""}
-          <div class="adm-body">${({ years: renderYears, goals: renderGoals, strategies: renderStrategies, standards: renderStandards })[st.tab]()}</div>
+          <div class="adm-body">${({ years: renderYears, goals: renderGoals, strategies: renderStrategies, standards: renderStandards, documents: renderDocuments })[st.tab]()}</div>
         </section>
       </div>
-      <datalist id="adm-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`;
+      <datalist id="adm-units">${UNITS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>
+      <datalist id="adm-doc-cats">${DOC_CATS.map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`;
     root.querySelectorAll("textarea").forEach(autosize);
   }
 
@@ -243,6 +252,13 @@
 
         ${card("เครื่องมือข้อมูล", `
           <div class="tool-row">
+            <div><strong>ดาวน์โหลดข้อมูลและรายงานปี ${esc(st.year)}</strong><small>Excel: มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย ผลการประเมิน หลักฐาน เป้าหมาย และกลยุทธ์ แยกแท็บ · Word: ร่างรายงาน SAR ฟอนต์ TH Sarabun New</small></div>
+            <div class="tool-btns">
+              <button type="button" class="btn small primary" data-act="dl-excel">Excel</button>
+              <button type="button" class="btn small primary" data-act="dl-word">Word (SAR)</button>
+            </div>
+          </div>
+          <div class="tool-row">
             <div><strong>ค่าตั้งค่าปี ${esc(st.year)}</strong><small>ส่งออกเป็นไฟล์ หรือนำเข้าแทนฉบับร่าง (ต้องกดบันทึกหลังนำเข้า)</small></div>
             <div class="tool-btns">
               <button type="button" class="btn small" data-act="export">ส่งออก JSON</button>
@@ -291,6 +307,24 @@
       </article>`).join("") || `<div class="adm-card"><p class="empty">ยังไม่มีกลยุทธ์</p></div>`}
       <button type="button" class="btn add-btn" data-act="add" data-list="strategies" data-kind="strategy">+ เพิ่มกลยุทธ์</button>
     </div>`;
+  }
+
+  // ---------- เอกสาร
+  function renderDocuments() {
+    const docs = st.draft.documents;
+    return card(`เอกสาร ปีการศึกษา ${esc(st.year)}`, `
+      <p class="hint">วางลิงก์ไฟล์จาก Google Drive (ตั้งสิทธิ์แชร์ให้คนในโรงเรียนเปิดได้) เอกสารจะแสดงในหัวข้อ "เอกสารดาวน์โหลด" ที่หน้าแรก จัดกลุ่มตามหมวด</p>
+      <ol class="doc-edit">${docs.map((x, k) => `<li class="doc-item">
+        <div class="field-grid doc-grid">
+          <label class="field">ชื่อเอกสาร<input data-bind="documents.${k}.title" value="${esc(x.title)}" placeholder="เช่น ประกาศค่าเป้าหมาย ปีการศึกษา ${esc(st.year)}"></label>
+          <label class="field">หมวด<input list="adm-doc-cats" data-bind="documents.${k}.category" value="${esc(x.category)}"></label>
+          <label class="field">ลิงก์ไฟล์ (https://)<input type="url" data-bind="documents.${k}.url" value="${esc(x.url)}" placeholder="https://drive.google.com/…"></label>
+          <label class="field">คำอธิบาย (ไม่บังคับ)<input data-bind="documents.${k}.note" value="${esc(x.note)}"></label>
+        </div>
+        <div class="doc-tools">${/^https:\/\//i.test(x.url || "") ? `<a class="btn small" href="${esc(x.url)}" target="_blank" rel="noopener">เปิดดู</a>` : ""}${rowTools("documents", k, docs.length, "เอกสาร")}</div>
+      </li>`).join("") || `<li class="empty">ยังไม่มีเอกสาร</li>`}</ol>
+      <button type="button" class="btn add-btn" data-act="add" data-list="documents" data-kind="doc">+ เพิ่มเอกสาร</button>`,
+    { meta: `${docs.length} รายการ` });
   }
 
   // ---------- มาตรฐาน ตัวชี้วัด ค่าเป้าหมาย (เลือกทีละมาตรฐาน)
@@ -660,6 +694,15 @@
       }
       if (act === "export") {
         downloadJson(`iqa-config-${st.year}.json`, st.draft);
+        return;
+      }
+      if (act === "dl-excel" || act === "dl-word") {
+        if (isDirty() && !confirm("ฉบับร่างยังไม่ได้บันทึก ไฟล์จะใช้ค่าตั้งค่าที่บันทึกไว้ล่าสุด ดาวน์โหลดต่อหรือไม่?")) return;
+        el.disabled = true;
+        try {
+          const kind = act === "dl-excel" ? "excel" : "word";
+          await app().run(() => window.IQAExport[kind](st.year), `ดาวน์โหลดไฟล์ ${kind === "excel" ? "Excel" : "Word"} ปี ${st.year} แล้ว`);
+        } catch (err) { /* แจ้งแล้ว */ } finally { el.disabled = false; }
         return;
       }
       if (act === "backup") {
